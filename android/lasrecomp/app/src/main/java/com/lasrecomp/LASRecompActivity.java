@@ -103,6 +103,8 @@ public class LASRecompActivity extends SDLActivity {
     private static final int REQ_LOG = 0x4c47, REQ_DRIVER_RECOVER = 0x4c48, REQ_FONTS = 0x4c49;
     private File saveTarget;
     private boolean exportPrevious;
+    private static final String PREF_PENDING_PACKAGE_IMPORT = "pendingPackageImport";
+    private static final String NXDUMP_URL = "https://github.com/alialani04/nxdump";
     private static LASRecompActivity self;
 
     @Override
@@ -163,6 +165,7 @@ public class LASRecompActivity extends SDLActivity {
         super.onResume();
         stats.post(report);
         PlayService.start(this);  // (keeps the game alive at the home screen: PlayService.java)
+        continuePendingPackageImport();
     }
 
     @Override
@@ -246,6 +249,90 @@ public class LASRecompActivity extends SDLActivity {
 
     // ---- pickers (called from the start screen, on SDL's thread)
     private static volatile boolean importInPlace;  // (the next game folder picked: its romfs/ or romfs.bin used where it is)
+
+
+
+    /**
+     * Source chooser for Android. XCI/NSP extraction is delegated to NxDump; this app imports
+     * the resulting ExeFS folder. The extracted-folder route remains fully local.
+     */
+    public static void chooseGameSource(boolean useInPlace) {
+        LASRecompActivity a = self;
+        if (a == null) return;
+        a.runOnUiThread(() -> new AlertDialog.Builder(a)
+            .setTitle("Choose game source")
+            .setItems(new String[] {
+                "Import XCI package",
+                "Import NSP package",
+                "Select extracted folder"
+            }, (dialog, which) -> {
+                if (which == 0) a.showNxDumpInstructions("XCI");
+                else if (which == 1) a.showNxDumpInstructions("NSP");
+                else if (useInPlace) a.pickGameFolderInPlace();
+                else a.pickGameFolder();
+            })
+            .setNegativeButton("Cancel", null)
+            .show());
+    }
+
+    private void showNxDumpInstructions(String format) {
+        new AlertDialog.Builder(this)
+            .setTitle("Import " + format)
+            .setMessage(
+                "NxDump handles " + format + " extraction. In NxDump, add the folder containing your dump, " +
+                "select the Clustertruck game, and extract ExeFS. RomFS is optional for the current generic " +
+                "recompilation step. Enable Merge update when an update is detected.\n\n" +
+                "When extraction finishes, return here and choose the extracted folder containing exefs/ " +
+                "(or choose the exefs folder itself). Your keys remain inside NxDump; do not share them.\n\n" +
+                "Note: this imports and recompiles executable code for analysis. Clustertruck boot/gameplay " +
+                "support is not integrated yet."
+            )
+            .setPositiveButton("Open NxDump", (dialog, which) -> openNxDump(format))
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void openNxDump(String format) {
+        Intent launch = new Intent(Intent.ACTION_MAIN);
+        launch.addCategory(Intent.CATEGORY_LAUNCHER);
+        launch.setClassName("com.nxdump", "com.nxdump.MainActivity");
+        try {
+            getSharedPreferences("lasrecomp", MODE_PRIVATE).edit()
+                .putString(PREF_PENDING_PACKAGE_IMPORT, format).apply();
+            startActivity(launch);
+        } catch (Exception e) {
+            getSharedPreferences("lasrecomp", MODE_PRIVATE).edit()
+                .remove(PREF_PENDING_PACKAGE_IMPORT).apply();
+            new AlertDialog.Builder(this)
+                .setTitle("NxDump not found")
+                .setMessage("Install your NxDump 1.0.1 build, then try again. You can open the NxDump project page.")
+                .setPositiveButton("Open NxDump project", (d, w) ->
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(NXDUMP_URL))))
+                .setNegativeButton("Cancel", null)
+                .show();
+        }
+    }
+
+    private void continuePendingPackageImport() {
+        android.content.SharedPreferences prefs = getSharedPreferences("lasrecomp", MODE_PRIVATE);
+        String format = prefs.getString(PREF_PENDING_PACKAGE_IMPORT, null);
+        if (format == null) return;
+        prefs.edit().remove(PREF_PENDING_PACKAGE_IMPORT).apply();
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            new AlertDialog.Builder(this)
+                .setTitle("Continue " + format + " import?")
+                .setMessage(
+                    "After NxDump finishes, select the extracted game folder that contains exefs/, " +
+                    "or select exefs/ itself (the folder with main and sdk). For the current generic " +
+                    "recompilation step, ExeFS is enough; RomFS can be skipped to save storage. " +
+                    "The game is not playable from this build yet."
+                )
+                .setPositiveButton("Choose extracted folder", (d, w) -> pickGameFolder())
+                .setNegativeButton("Not now", null)
+                .show();
+        }, 350);
+    }
 
     public static void pickGameFolder() {
         importInPlace = false;
@@ -814,10 +901,9 @@ public class LASRecompActivity extends SDLActivity {
                 int got = 0;
                 for (int r; got < head.length && (r = in.read(head, got, head.length - got)) > 0; ) got += r;
             }
-            if (!compileOnly && !nativeBuildIdOk(head)) {
-                nativeImportDone(4);
-                return;
-            }
+            // A non-LAS main build ID is still useful to the generic NSO recompiler. Keep this as an ExeFS-only
+            // import rather than rejecting it or pretending its RomFS can boot in the LAS-specific runtime.
+            if (!nativeBuildIdOk(head)) compileOnly = true;
             File dataRoot = getExternalFilesDir(null);
             if (dataRoot == null) throw new IOException("App storage is unavailable. Check the phone storage and retry.");
             File games = new File(dataRoot, "extracted");
