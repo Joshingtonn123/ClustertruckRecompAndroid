@@ -41,7 +41,6 @@ import java.util.Locale;
  */
 public final class MainActivity extends Activity {
     private static final int REQUEST_PACKAGE = 1001;
-    private static final int REQUEST_FOLDER = 1002;
     private static final int MAX_PFS0_ENTRIES = 8192;
     private static final int MAX_STRING_TABLE = 4 * 1024 * 1024;
     private static final int MAX_FILES = 100_000;
@@ -52,11 +51,12 @@ public final class MainActivity extends Activity {
     private TextView statusView;
     private Button playButton;
     private Button packageButton;
-    private Button folderButton;
+    private Button settingsButton;
     private Button shareButton;
     private Button copyButton;
     private String lastReport = "";
     private volatile boolean scanning;
+    private boolean packageSelected;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -132,9 +132,10 @@ public final class MainActivity extends Activity {
         playButton.setTextColor(Color.rgb(20, 22, 25));
         playButton.setAllCaps(false);
         playButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        playButton.setBackground(roundRect(Color.rgb(255, 174, 55), dp(13)));
+        playButton.setBackground(roundRect(Color.rgb(66, 73, 83), dp(13)));
+        playButton.setEnabled(false);
         playButton.setOnClickListener(v -> Toast.makeText(this,
-                "The Clustertruck game runtime is not integrated yet. PLAY is a placeholder for now.",
+                "Package selected! The Clustertruck game runtime is still being developed, so gameplay is not available yet.",
                 Toast.LENGTH_LONG).show());
         LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, dp(48));
         playParams.topMargin = dp(10);
@@ -163,13 +164,15 @@ public final class MainActivity extends Activity {
         styleSmallButton(packageButton, "OPEN FILE");
         packageButton.setOnClickListener(v -> pickPackage());
         tools.addView(packageButton);
-        folderButton = new Button(this);
-        styleSmallButton(folderButton, "OPEN FOLDER");
-        LinearLayout.LayoutParams folderParams = new LinearLayout.LayoutParams(-2, dp(36));
-        folderParams.leftMargin = dp(6);
-        folderButton.setLayoutParams(folderParams);
-        folderButton.setOnClickListener(v -> pickFolder());
-        tools.addView(folderButton);
+        settingsButton = new Button(this);
+        styleSmallButton(settingsButton, "⚙ SETTINGS");
+        LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(-2, dp(36));
+        settingsParams.leftMargin = dp(6);
+        settingsButton.setLayoutParams(settingsParams);
+        settingsButton.setOnClickListener(v -> Toast.makeText(this,
+                "Settings are not available in this development build yet.",
+                Toast.LENGTH_SHORT).show());
+        tools.addView(settingsButton);
         right.addView(tools);
 
         TextView reportHint = makeText("NSP / XCI CONTAINER DETAILS  •  READ-ONLY", 9, Color.rgb(129, 145, 164), true);
@@ -179,7 +182,7 @@ public final class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        reportView = makeText("NO REPORT YET\n\nChoose OPEN FILE to inspect your .NSP / .XCI package, or OPEN FOLDER to scan an already-extracted game directory.\n\nThis build reads visible metadata only. It does not decrypt, extract, patch, or run game files.", 11, Color.rgb(185, 196, 210), false);
+        reportView = makeText("NO REPORT YET\n\nChoose OPEN FILE to inspect your .NSP or .XCI package.\n\nPLAY stays locked until a supported package is selected. This build reads visible metadata only; the game runtime is not integrated yet.", 11, Color.rgb(185, 196, 210), false);
         reportView.setTypeface(Typeface.MONOSPACE);
         reportView.setTextIsSelectable(true);
         reportView.setPadding(dp(12), dp(12), dp(12), dp(12));
@@ -213,6 +216,7 @@ public final class MainActivity extends Activity {
         footerParams.topMargin = dp(8);
         page.addView(footer, footerParams);
         setContentView(page);
+        updatePlayButton();
     }
 
     private TextView makeText(String value, int size, int color, boolean bold) {
@@ -229,6 +233,23 @@ public final class MainActivity extends Activity {
         drawable.setColor(color);
         drawable.setCornerRadius(radius);
         return drawable;
+    }
+
+    private void updatePlayButton() {
+        if (playButton == null) return;
+        if (packageSelected) {
+            playButton.setEnabled(true);
+            playButton.setTextColor(Color.rgb(20, 22, 25));
+            playButton.setBackground(roundRect(Color.rgb(255, 190, 55), dp(13)));
+            statusView.setText("●  PACKAGE SELECTED  •  RUNTIME IN DEVELOPMENT");
+            statusView.setTextColor(Color.rgb(255, 190, 100));
+        } else {
+            playButton.setEnabled(false);
+            playButton.setTextColor(Color.rgb(160, 166, 174));
+            playButton.setBackground(roundRect(Color.rgb(66, 73, 83), dp(13)));
+            statusView.setText("●  NO PACKAGE SELECTED  •  PLAY LOCKED");
+            statusView.setTextColor(Color.rgb(150, 160, 174));
+        }
     }
 
     private void styleSmallButton(Button button, String label) {
@@ -255,12 +276,6 @@ public final class MainActivity extends Activity {
         startActivityForResult(intent, REQUEST_PACKAGE);
     }
 
-    private void pickFolder() {
-        if (scanning) return;
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        startActivityForResult(intent, REQUEST_FOLDER);
-    }
-
     @Override
     @SuppressWarnings("deprecation")
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -269,8 +284,6 @@ public final class MainActivity extends Activity {
         Uri uri = data.getData();
         if (requestCode == REQUEST_PACKAGE) {
             inspectAsync("Inspecting package metadata…", () -> inspectPackage(uri));
-        } else if (requestCode == REQUEST_FOLDER) {
-            inspectAsync("Scanning extracted game folder…", () -> inspectFolder(uri));
         }
     }
 
@@ -300,6 +313,9 @@ public final class MainActivity extends Activity {
                 reportView.setText(finalResult);
                 shareButton.setEnabled(!lastReport.isEmpty());
                 copyButton.setEnabled(!lastReport.isEmpty());
+                packageSelected = finalResult.contains("Container: XCI cartridge image") ||
+                        finalResult.contains("Container: PFS0 package");
+                updatePlayButton();
                 setButtonsEnabled(true);
             });
         }, "clustertruck-dump-probe").start();
@@ -307,7 +323,7 @@ public final class MainActivity extends Activity {
 
     private void setButtonsEnabled(boolean enabled) {
         packageButton.setEnabled(enabled);
-        folderButton.setEnabled(enabled);
+        settingsButton.setEnabled(enabled);
     }
 
     private String inspectPackage(Uri uri) throws IOException {
