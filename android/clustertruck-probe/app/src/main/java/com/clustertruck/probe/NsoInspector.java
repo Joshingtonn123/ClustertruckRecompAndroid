@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -18,8 +19,8 @@ import java.util.Locale;
  */
 final class NsoInspector {
     private static final int HEADER_SIZE = 0x80;
-    private static final int MAX_RAW_BYTES = 96 * 1024 * 1024;
-    private static final int MAX_IMAGE_BYTES = 192 * 1024 * 1024;
+    private static final int MAX_RAW_BYTES = 64 * 1024 * 1024;
+    private static final int MAX_IMAGE_BYTES = 128 * 1024 * 1024;
     private static final int MAX_DYNAMIC_ENTRIES = 8192;
     private static final int MAX_SYMBOLS = 200_000;
     private static final int MAX_RELOCATIONS = 1_000_000;
@@ -33,22 +34,13 @@ final class NsoInspector {
         String summary = headerSummary(header, path);
 
         if (reportedSize > MAX_RAW_BYTES) {
-            return summary + "\n    Dynamic metadata: skipped (module exceeds the 96 MiB safety limit)";
+            return summary + "\n    Dynamic metadata: skipped (module exceeds the 64 MiB safety limit)";
         }
 
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream(Math.min(MAX_RAW_BYTES, 64 * 1024));
-        bytes.write(header);
-        byte[] block = new byte[64 * 1024];
-        int count;
-        while ((count = input.read(block)) >= 0) {
-            if (count == 0) continue;
-            if ((long) bytes.size() + count > MAX_RAW_BYTES) {
-                return summary + "\n    Dynamic metadata: skipped (module exceeds the 96 MiB safety limit)";
-            }
-            bytes.write(block, 0, count);
+        byte[] raw = readModule(input, header, reportedSize);
+        if (raw == null) {
+            return summary + "\n    Dynamic metadata: skipped (module exceeds the 64 MiB safety limit or has an inconsistent reported size)";
         }
-
-        byte[] raw = bytes.toByteArray();
         try {
             return summary + "\n" + dynamicSummary(raw);
         } catch (Exception error) {
@@ -105,15 +97,12 @@ final class NsoInspector {
             int source = (int) fileOff[i];
             int stored = (int) compSize[i];
             int expected = (int) decSize[i];
-            byte[] segment;
             if ((flags & (1L << i)) != 0) {
-                segment = lz4Block(raw, source, stored, expected);
+                lz4Block(raw, source, stored, image, (int) memOff[i], expected);
             } else {
                 if (stored < expected) throw new IOException("uncompressed NSO segment is truncated");
-                segment = new byte[expected];
-                System.arraycopy(raw, source, segment, 0, expected);
+                System.arraycopy(raw, source, image, (int) memOff[i], expected);
             }
-            System.arraycopy(segment, 0, image, (int) memOff[i], expected);
         }
 
         long mod0 = u32(image, 4);
@@ -238,8 +227,9 @@ final class NsoInspector {
         }
     }
 
-    private static byte[] lz4Block(byte[] input, int offset, int length, int outputLength) throws IOException {
-        byte[] output = new byte[outputLength];
+    private static void lz4Block(byte[] input, int offset, int length, byte[] output,
+                                  int outputOffset, int outputLength) throws IOException {
+        requireRange(output.length, outputOffset, outputLength, "LZ4 destination");
         int in = offset, inEnd = offset + length, out = 0;
         while (in < inEnd) {
             int token = input[in++] & 0xff;
@@ -252,9 +242,9 @@ final class NsoInspector {
                     literals += extension;
                 } while (extension == 255);
             }
-            if (literals > inEnd - in || literals > output.length - out)
+            if (literals > inEnd - in || literals > outputLength - out)
                 throw new IOException("invalid LZ4 literal range");
-            System.arraycopy(input, in, output, out, literals);
+            System.arraycopy(input, in, output, outputOffset + out, literals);
             in += literals;
             out += literals;
             if (in == inEnd) break;
@@ -272,12 +262,40 @@ final class NsoInspector {
                 } while (extension == 255);
             }
             match += 4;
-            if (match > output.length - out) throw new IOException("LZ4 output exceeds declared segment size");
-            for (int i = 0; i < match; i++) output[out + i] = output[out + i - back];
+            if (match > outputLength - out) throw new IOException("LZ4 output exceeds declared segment size");
+            for (int i = 0; i < match; i++)
+                output[outputOffset + out + i] = output[outputOffset + out + i - back];
             out += match;
         }
-        if (out != outputLength) throw new IOException("LZ4 segment length mismatch (" + out + " != " + outputLength + ")");
-        return output;
+        if (out != outputLength)
+            throw new IOException("LZ4 segment length mismatch (" + out + " != " + outputLength + ")");
+    }
+
+    private static byte[] readModule(InputStream input, byte[] header, long reportedSize) throws IOException {
+        if (reportedSize > 0) {
+            if (reportedSize > MAX_RAW_BYTES || reportedSize < header.length) return null;
+            byte[] raw = new byte[(int) reportedSize];
+            System.arraycopy(header, 0, raw, 0, header.length);
+            int offset = header.length;
+            while (offset < raw.length) {
+                int count = input.read(raw, offset, raw.length - offset);
+                if (count < 0) throw new IOException("NSO file ended before its reported size");
+                if (count == 0) continue;
+                offset += count;
+            }
+            return input.read() < 0 ? raw : null;
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream(256 * 1024);
+        out.write(header);
+        byte[] buffer = new byte[32 * 1024];
+        int count;
+        while ((count = input.read(buffer)) >= 0) {
+            if (count == 0) continue;
+            if ((long) out.size() + count > MAX_RAW_BYTES) return null;
+            out.write(buffer, 0, count);
+        }
+        return out.toByteArray();
     }
 
     private static byte[] readAtMost(InputStream input, int limit) throws IOException {
