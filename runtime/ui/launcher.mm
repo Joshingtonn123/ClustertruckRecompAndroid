@@ -334,6 +334,7 @@ static bool build_game_code(bool force_recompile = false) {
 
 #ifdef __ANDROID__
 static bool romfs_damaged(const std::string &root);
+std::atomic<bool> g_android_recompile_only{false};
 #endif
 static void *extract_thread(void *) {
     std::string src;
@@ -428,7 +429,6 @@ done:
 // picked the same way (a Turnip .zip, copied to the drivers folder the activity loads from at start).
 #include <jni.h>
 std::atomic<bool> g_android_imported{false};
-static std::atomic<bool> g_android_recompile_only{false};
 static std::string g_driver_msg;
 static bool g_driver_restart;  // (that message asks for a restart: the Restart now button)
 static std::string g_save_msg;
@@ -964,7 +964,7 @@ static void android_prune_loose(void) {  // (start screen, game files ready)
     if (pthread_create(&t, NULL, prune_thread, NULL) == 0) pthread_detach(t);
 }
 
-// 0 copied, 1 cancelled, 2 no game files found, 3 game packages instead of files, 4 another version, 5 copy failed
+// 0 copied, 1 cancelled, 2 no game files found, 3 game packages instead of files, 4 another version, 5 copy failed, 6 generic ExeFS recompilation
 extern "C" JNIEXPORT void JNICALL Java_com_lasrecomp_LASRecompActivity_nativeImportFailure(JNIEnv *env, jclass, jstring reason) {
     const char *message = env->GetStringUTFChars(reason, NULL);
     set_job("Setup didn't finish", true, message ? message : "Could not import game files. Please try again.");
