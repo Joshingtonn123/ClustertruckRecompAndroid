@@ -43,3 +43,8 @@ A separate public reference, [Cruis'n Blast Recomp](https://github.com/darkuni/c
 ## Development branch
 
 Work is being done on `clustertruck-dev`. The upstream-derived `main` branch is left untouched until a real Clustertruck implementation is ready.
+
+
+### Android ExeFS-only recompilation
+
+The Android folder importer accepts an extracted ExeFS tree with `main` and `sdk` even when no Link's Awakening RomFS folder is present. It runs the generic on-device NSO-to-C recompilation and reports success separately; it does not launch the generated code. Clustertruck's runtime, startup services and renderer still need separate integration before the game can boot.

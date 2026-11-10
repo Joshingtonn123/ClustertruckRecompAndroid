@@ -708,7 +708,7 @@ public class LASRecompActivity extends SDLActivity {
     private void find(Uri tree, Doc dir, int depth) {
         if (depth > 4 || (exefs != null && romfs != null)) return;
         List<Doc> kids = children(tree, dir.id);
-        if (exefs == null && named(kids, "main") != null && named(kids, "main.npdm") != null) exefs = dir;
+        if (exefs == null && named(kids, "main") != null && named(kids, "sdk") != null) exefs = dir;
         Doc rc = named(kids, "region_common");
         if (romfs == null && rc != null && rc.dir) romfs = dir;
         for (Doc k : kids)
@@ -798,23 +798,45 @@ public class LASRecompActivity extends SDLActivity {
             root.id = DocumentsContract.getTreeDocumentId(tree);
             root.dir = true;
             find(tree, root, 0);
-            if (exefs == null || (romfs == null && romfsBin == null)) {
+            boolean compileOnly = romfs == null && romfsBin == null;
+            if (exefs == null) {
                 nativeImportDone(packages ? 3 : 2);
                 return;
             }
             Doc main = named(children(tree, exefs.id), "main");
+            Doc sdk = named(children(tree, exefs.id), "sdk");
+            if (main == null || sdk == null) {
+                nativeImportDone(2);
+                return;
+            }
             byte[] head = new byte[0x60];  // (the NSO header: the main build ID at 0x40, runtime/game_addresses/versions.h)
             try (InputStream in = getContentResolver().openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, main.id))) {
                 int got = 0;
                 for (int r; got < head.length && (r = in.read(head, got, head.length - got)) > 0; ) got += r;
             }
-            if (!nativeBuildIdOk(head)) {
+            if (!compileOnly && !nativeBuildIdOk(head)) {
                 nativeImportDone(4);
                 return;
             }
             File dataRoot = getExternalFilesDir(null);
             if (dataRoot == null) throw new IOException("App storage is unavailable. Check the phone storage and retry.");
             File games = new File(dataRoot, "extracted");
+            if (compileOnly) {
+                long exefsBytes = treeBytes(tree, exefs);
+                total = exefsBytes;
+                long needed = ImportStorage.requiredBytes(exefsBytes, 0);
+                long available = games.getParentFile().getUsableSpace();
+                if (available < needed) {
+                    nativeImportFailure(ImportStorage.spaceMessage(needed, available));
+                    return;
+                }
+                String name = DocumentsContract.getTreeDocumentId(tree);
+                nativeImportBegin(name.substring(name.lastIndexOf(':') + 1));
+                copyTree(tree, exefs, new File(games, "exefs"));
+                nativeImportProgress(copied, total);
+                nativeImportDone(6);  // ExeFS-only: generic main+sdk recompilation, no game boot.
+                return;
+            }
             if ("com.android.externalstorage.documents".equals(tree.getAuthority())) {
                 for (Doc source : new Doc[] {exefs, romfs != null ? romfs : romfsBin}) {
                     if (source.id.startsWith("primary:")) {

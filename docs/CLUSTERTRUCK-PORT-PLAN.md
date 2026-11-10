@@ -169,3 +169,10 @@ The XCI/HFS0 report and WebGL scan do not contain enough Switch-specific evidenc
 ### Extra metadata now collected by the phone scanner
 
 The extracted-folder scanner now reads the fixed 8-byte header of `global-metadata.dat` independently of the general text-scan size limit. It checks the IL2CPP metadata magic (`0xFAB11BAF`) and reports the metadata version only when that magic is present. It also records Unity-style version-string candidates from the leading bytes of `globalgamemanagers`, `boot.config` and `.assets` files. These are stronger leads than plain filename matches, but the report still labels Unity version values as candidates and does not assume the WebGL and Switch builds match.
+
+
+## ExeFS-only Android recompilation entry point — 2026-11-10
+
+The Android folder importer now has an ExeFS-only path: when a selected extracted folder contains `main` and `sdk` but no LAS RomFS marker / RomFS image, it copies the ExeFS tree and invokes the on-device generic game-code builder. This path skips the Link's Awakening build-ID gate and doesn't require Zelda's `region_common` data. It reports code-generation completion separately and does not attempt to boot the result. For lower-memory phones, this forced generic build is capped at two concurrent compiler jobs.
+
+This provides a phone-side route to generate Clustertruck's C/ARM64 native game library once its extracted Switch `main` and `sdk` modules are available. The real modules are still required before we can know whether the parser/lifter supports them. The launcher boot flow, startup symbol, service/HLE layer, Unity runtime integration, and NVN/renderer compatibility remain unimplemented/unknown. A completed generic library is not a playable port.

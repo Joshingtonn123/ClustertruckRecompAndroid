@@ -183,7 +183,13 @@ static bool file_exists(const std::string &p) {
 // The copied game files alone ("" = there), without the game code built from them
 static std::string check_copied_files(const std::string &root) {
     if (!file_exists(root + "/exefs/main")) return "No game files";
-    if (!game_version_of(root.c_str())) return "Wrong game version (needs v1.0.0, v1.0.1 or v1.1.0)";
+    if (!game_version_of(root.c_str())) {
+#ifdef __ANDROID__
+        if (file_exists(root + "/exefs/sdk") && gamelib_present(root.c_str()))
+            return "Generic game code compiled; game boot support is not integrated yet";
+#endif
+        return "Wrong game version (needs v1.0.0, v1.0.1 or v1.1.0)";
+    }
 #ifdef __ANDROID__
     char linked[1024];  // (the game files used in place: the player's own romfs/ or romfs.bin - romfs_build.h romfs.link)
     if (romfs_link_read(root.c_str(), linked, sizeof linked)) {
@@ -301,12 +307,16 @@ static float extract_progress(void) {
 }
 
 // Builds the game code from the copied files (a few minutes); false = failed (the job line says so)
-static bool build_game_code(void) {
+static bool build_game_code(bool force_recompile = false) {
 #ifdef __ANDROID__
-    if (native_wanted()) return true;  // (the game's own code runs as it is)
+    if (!force_recompile && native_wanted()) return true;  // (the game's own code runs as it is)
 #endif
     int cores = SDL_GetNumLogicalCPUCores(), ram_gb = SDL_GetSystemRAM() / 1024;
-    GameBuildOpts o = {build_progress, cores < ram_gb - 2 ? cores : ram_gb - 2 > 1 ? ram_gb - 2 : 1};
+    int jobs = cores < ram_gb - 2 ? cores : ram_gb - 2 > 1 ? ram_gb - 2 : 1;
+#ifdef __ANDROID__
+    if (force_recompile && jobs > 2) jobs = 2;  // Prefer reliable builds over fast builds on phone RAM.
+#endif
+    GameBuildOpts o = {build_progress, jobs};
     char why[256] = "";
     g_build_frac = 0;
     bool ok = gamebuild_run(g_root.c_str(), &o, why, sizeof why);
@@ -335,8 +345,13 @@ static void *extract_thread(void *) {
     bool unusable = false;  // (game packages rather than its files)
 #ifdef __ANDROID__
     extern std::atomic<bool> g_android_imported;
-    if (g_android_imported.exchange(false)) {  // (the activity copied exefs/ and built romfs.bin: below) the code
-        if (!build_game_code()) goto done;
+    if (g_android_imported.exchange(false)) {
+        bool recompile_only = g_android_recompile_only.exchange(false);
+        if (!build_game_code(recompile_only)) goto done;
+        if (recompile_only) {
+            set_job("Generic recompilation finished. Native game code was generated; boot support is still in progress.");
+            goto done;
+        }
         extern void android_drop_same_release(void);
         android_drop_same_release();  // (the same release imported again: it replaces the one put aside)
         goto check;
@@ -413,6 +428,7 @@ done:
 // picked the same way (a Turnip .zip, copied to the drivers folder the activity loads from at start).
 #include <jni.h>
 std::atomic<bool> g_android_imported{false};
+static std::atomic<bool> g_android_recompile_only{false};
 static std::string g_driver_msg;
 static bool g_driver_restart;  // (that message asks for a restart: the Restart now button)
 static std::string g_save_msg;
@@ -564,6 +580,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_lasrecomp_LASRecompActivity_nativeImp
     pthread_mutex_lock(&g_lock);
     g_busy = true;
     g_src = n ? n : "";
+    g_android_recompile_only = false;
     pthread_mutex_unlock(&g_lock);
     if (n) env->ReleaseStringUTFChars(name, n);
     // a release already here is put aside (the start screen's version choice; the same release imported again
@@ -958,7 +975,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_lasrecomp_LASRecompActivity_nativeImp
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_lasrecomp_LASRecompActivity_nativeImportDone(JNIEnv *, jclass, jint result) {
-    if (result == 0) {
+    if (result == 0 || result == 6) {
+        g_android_recompile_only = result == 6;
         g_android_imported = true;
         pthread_t t;
         pthread_create(&t, NULL, extract_thread, NULL);

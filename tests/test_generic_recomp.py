@@ -54,6 +54,16 @@ def make_synthetic_nso(path: Path) -> None:
 
 
 class GenericNsoRecompTests(unittest.TestCase):
+    def test_android_import_has_exefs_only_recompile_path(self):
+        launcher = (ROOT / "runtime" / "ui" / "launcher.mm").read_text()
+        activity = (ROOT / "android" / "lasrecomp" / "app" / "src" / "main" / "java" /
+                    "com" / "lasrecomp" / "LASRecompActivity.java").read_text()
+        self.assertIn("g_android_recompile_only.exchange(false)", launcher)
+        self.assertIn("Generic recompilation finished", launcher)
+        self.assertIn("boolean compileOnly = romfs == null && romfsBin == null;", activity)
+        self.assertIn("nativeImportDone(6)", activity)
+        self.assertIn('named(kids, "sdk") != null', activity)
+
     def test_android_gamebuild_uses_generic_mode_for_main_only(self):
         source = (ROOT / "runtime" / "gamebuild.c").read_text()
         self.assertIn('if (i == 0) add(&a, "--generic");', source)
