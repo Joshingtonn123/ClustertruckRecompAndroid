@@ -138,6 +138,55 @@ def inspect_nso(path: Path, relative_path: str) -> dict[str, Any]:
     return result
 
 
+
+def parse_pfs0(path: Path, max_entries: int = 4096) -> dict[str, Any]:
+    """Read a PFS0 directory table and list file metadata; never extract file payloads."""
+    file_size = path.stat().st_size
+    with path.open("rb") as stream:
+        header = stream.read(0x10)
+        if len(header) != 0x10 or header[:4] != b"PFS0":
+            raise ValueError("not a PFS0 container")
+        file_count, string_size, _reserved = __import__("struct").unpack_from("<III", header, 4)
+        if file_count > max_entries:
+            raise ValueError(f"PFS0 entry count {file_count} exceeds safety limit {max_entries}")
+        table_size = file_count * 0x18
+        data_start = 0x10 + table_size + string_size
+        if data_start > file_size:
+            raise ValueError("PFS0 directory/string table extends beyond the file")
+        stream.seek(0x10)
+        table = stream.read(table_size)
+        strings = stream.read(string_size)
+        if len(table) != table_size or len(strings) != string_size:
+            raise ValueError("truncated PFS0 directory")
+        entries = []
+        for index in range(file_count):
+            offset, size, name_offset, _entry_reserved = __import__("struct").unpack_from(
+                "<QQII", table, index * 0x18
+            )
+            if name_offset >= string_size:
+                raise ValueError(f"PFS0 entry {index} has an invalid name offset")
+            name_end = strings.find(b"\0", name_offset)
+            if name_end < 0:
+                raise ValueError(f"PFS0 entry {index} has an unterminated name")
+            name = strings[name_offset:name_end].decode("utf-8", errors="replace")
+            absolute_start = data_start + offset
+            if absolute_start > file_size or size > file_size - absolute_start:
+                raise ValueError(f"PFS0 entry {name!r} extends beyond the file")
+            stream.seek(absolute_start)
+            prefix = stream.read(0x204)
+            entries.append({
+                "name": name,
+                "size_bytes": size,
+                "signature": classify_magic(prefix),
+            })
+        return {
+            "entry_count": file_count,
+            "data_start_offset": data_start,
+            "entries": entries,
+            "payloads_extracted": False,
+        }
+
+
 def inspect_single_file(path: Path) -> dict[str, Any]:
     prefix = read_prefix(path)
     kind = classify_magic(prefix)
@@ -148,9 +197,18 @@ def inspect_single_file(path: Path) -> dict[str, Any]:
         "extension": path.suffix.lower(),
         "package_unpacking_performed": False,
     }
-    if path.suffix.lower() in {".nsp", ".xci", ".nca", ".nsz", ".xcz"}:
+    if kind == "PFS0 package container (commonly NSP)":
+        try:
+            result["pfs0"] = parse_pfs0(path)
+            result["message"] = (
+                "PFS0 directory metadata was read only. Inner content files were not extracted or decrypted."
+            )
+        except Exception as exc:  # malformed or truncated package; report, don't crash
+            result["pfs0_error"] = f"{type(exc).__name__}: {exc}"
+            result["message"] = "The PFS0 directory could not be read safely; no payloads were extracted."
+    elif path.suffix.lower() in {".nsp", ".xci", ".nca", ".nsz", ".xcz"}:
         result["message"] = (
-            "This is a Switch package/container input. This diagnostic only identifies its outer signature; "
+            "This is a Switch package/container input. This diagnostic identifies the outer signature only; "
             "it does not decrypt or extract package contents."
         )
     elif kind == "Nintendo Switch NSO executable":
