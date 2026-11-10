@@ -446,7 +446,14 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
         const char *e = getenv("LARECOMP_GAMEBUILD_HOT"), *gen = getenv("LARECOMP_GEN_DIR");
         char hot[1200];
         snprintf(hot, sizeof hot, "%s/gamelib-src/hot_functions.txt", gen ? gen : ".");
-        load_hot(e && strcmp(e, "0") ? e : e ? "" : hot, game_version_of(game_dir));
+        const GameVersion *version = game_version_of(game_dir);
+        if (version) {
+            load_hot(e && strcmp(e, "0") ? e : e ? "" : hot, version);
+        } else {
+            // A Clustertruck build has no Zelda version table. Never apply Zelda-derived hot-function address hints.
+            g_nhot = 0;
+            LOG("[gamebuild] unprofiled title: Zelda hot-function hints disabled\n");
+        }
         LOG("[gamebuild] hot functions: %zu%s\n", g_nhot, g_nhot ? " (the rest compiled with optnone)" : " (all at -O1)");
     }
     {   // (the previous one in internal storage: a failed build must not leave it looking current)
@@ -489,6 +496,7 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
         add(&a, g->out);
         if (i == 1) { add(&a, "--hle"); add(&a, t.hle); }
 #ifdef __ANDROID__
+        if (i == 0) add(&a, "--generic");  // Clustertruck: main has no Zelda build-ID or patch profile
         add(&a, "--simd"); add(&a, "asm"); add(&a, "--dyn-base");  // (as android/build_gamelib.sh: the window moves)
 #endif
         g->p = spawn(a.v, g->log);

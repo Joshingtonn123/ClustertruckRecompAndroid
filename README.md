@@ -29,6 +29,8 @@ The latest successful workflow produces an artifact named **`clustertruck-dump-p
 The tool is read-only. It does not contain game files or keys, decrypt packages, modify the dump, or run the game. An NSP/XCI filename listing by itself is not enough to prove the executable is compatible; an already-extracted folder provides more useful evidence. The folder scanner only inspects content that is already present in the folder you select; it does not create that folder or perform package extraction.
 
 ## Generic NSO generation smoke test
+The Android on-device game-code builder and `android/build_gamelib.sh` now invoke this mode for the main NSO; the SDK module remains on the normal HLE-symbol path. Zelda hot-function hints are disabled when the main build ID is not in the Zelda version table. The current launcher and runtime still contain Zelda-specific import and boot requirements, so this is not yet a complete Clustertruck launch path.
+
 
 `tools/gen.py` now includes a `--generic` mode that skips the Link's Awakening build-ID gate and all Zelda-specific instruction patches. A synthetic NSO CI test verifies that this mode emits Android dynamic-base C code for an arbitrary build ID. This is a recompiler-tooling test only; it does not make the current Zelda runtime Clustertruck-compatible and does not produce a playable APK.
 

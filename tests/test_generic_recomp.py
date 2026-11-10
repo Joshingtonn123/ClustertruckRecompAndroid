@@ -54,6 +54,15 @@ def make_synthetic_nso(path: Path) -> None:
 
 
 class GenericNsoRecompTests(unittest.TestCase):
+    def test_android_gamebuild_uses_generic_mode_for_main_only(self):
+        source = (ROOT / "runtime" / "gamebuild.c").read_text()
+        self.assertIn('if (i == 0) add(&a, "--generic");', source)
+        self.assertIn('if (i == 1) { add(&a, "--hle"); add(&a, t.hle); }', source)
+        self.assertIn('unprofiled title: Zelda hot-function hints disabled', source)
+        script = (ROOT / "android" / "build_gamelib.sh").read_text()
+        self.assertIn('gen.py main "$EXEFS/main" 0x7000000000 "$GEN/main" --generic --simd asm --dyn-base', script)
+        self.assertNotIn('gen.py sdk "$EXEFS/sdk" 0x7004000000 "$GEN/sdk" --generic', script)
+
     def run_generator(self, nso: Path, out: Path, generic: bool) -> subprocess.CompletedProcess:
         command = [
             sys.executable, str(GEN), "main", str(nso), "0x7000000000", str(out),

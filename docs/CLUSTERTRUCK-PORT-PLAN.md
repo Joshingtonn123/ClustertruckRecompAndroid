@@ -98,6 +98,8 @@ The existing generator now has an explicit `--generic` mode. In this mode it:
 
 The new `tests/test_generic_recomp.py` builds a tiny synthetic NSO containing one AArch64 `RET` function. CI first verifies that the normal Zelda mode rejects its unknown build ID, then verifies that `--generic` generates the C function and Android dynamic-base function table for it.
 
+The Android on-device builder in `runtime/gamebuild.c` now passes `--generic` for the `main` NSO (but not the SDK module) and disables the Zelda-derived hot-function address hints when the build ID has no Zelda profile. The Android helper script `android/build_gamelib.sh` does the same for its main-module generation. This wires the generic generator mode into the existing Android code-generation flow.
+
 **What this proves:** the repository's NSO reader/lifter can run through code generation for a synthetic unknown-build-ID NSO without Zelda-specific instruction patches.
 
 **What it does not prove:** that Clustertruck's actual Switch main/sdk are NSOs accepted by this parser, that the real instruction set is fully supported, or that the Zelda Android runtime can boot Unity. The runtime still enforces Link's Awakening's game-version profile, and its loader, HLE, filesystem, and renderer assumptions remain title-specific. Do not build or install a game APK based on this generator test.

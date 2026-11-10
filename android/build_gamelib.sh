@@ -22,7 +22,7 @@ LIBMAIN=$(ls -t "$R"/android/lasrecomp/app/build/intermediates/cxx/*/*/obj/arm64
 
 if [ ! -f "$GEN/main/main_table.c" ] || [ ! -f "$GEN/main/main_build_id.txt" ] || [ ! -f "$GEN/sdk/sdk_table.c" ]; then
     (cd tools && "../$PY" gen.py sdk "$EXEFS/sdk" 0x7004000000 "$GEN/sdk" --hle ../runtime/hle/hle_symbols.txt --simd asm --dyn-base)
-    (cd tools && "../$PY" gen.py main "$EXEFS/main" 0x7000000000 "$GEN/main" --simd asm --dyn-base)
+    (cd tools && "../$PY" gen.py main "$EXEFS/main" 0x7000000000 "$GEN/main" --generic --simd asm --dyn-base)
 fi
 
 "$CMAKE_DIR/cmake$EXE" -S "$R/android/gamelib" -B "$W" -G Ninja -DCMAKE_MAKE_PROGRAM="$CMAKE_DIR/ninja$EXE" \
