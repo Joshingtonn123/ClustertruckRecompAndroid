@@ -155,9 +155,9 @@ static uint64_t resolve(Module *m, uint32_t symidx) {
     // Unity / SDK imports without a host implementation should be visible in the device log.
     // The call still receives the normal unimplemented HLE stub; this is diagnostic, not a fake implementation.
     if (g_missing_import_logs < 64)
-        LOG("[loader] no host implementation for import '%s' from %s; using an unimplemented stub\\n", name, m->name);
+        LOG("[loader] no host implementation for import '%s' from %s; using an unimplemented stub\n", name, m->name);
     else if (g_missing_import_logs == 64)
-        LOG("[loader] further unimplemented imports suppressed\\n");
+        LOG("[loader] further unimplemented imports suppressed\n");
     g_missing_import_logs++;
 #endif
     return hle_register(name, NULL);
@@ -218,7 +218,7 @@ void loader_load(const char *exefs) {
             snprintf(path, sizeof path, "%s/%s", exefs, entry->d_name);
             struct stat st;
             if (stat(path, &st) == 0 && S_ISREG(st.st_mode))
-                LOG("[loader] EXTRA MODULE NOT LOADED: %s (current Clustertruck loader supports main + sdk only)\\n", entry->d_name);
+                LOG("[loader] EXTRA MODULE NOT LOADED: %s (current Clustertruck loader supports main + sdk only)\n", entry->d_name);
         }
         closedir(dir);
     }
