@@ -294,6 +294,8 @@ public final class MainActivity extends Activity {
     private void inspectAsync(String status, Inspection inspection) {
         if (scanning) return;
         scanning = true;
+        packageSelected = false;
+        updatePlayButton();
         setButtonsEnabled(false);
         shareButton.setEnabled(false);
         copyButton.setEnabled(false);
