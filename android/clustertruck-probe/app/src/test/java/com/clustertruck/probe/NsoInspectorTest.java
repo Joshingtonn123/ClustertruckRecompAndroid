@@ -16,6 +16,7 @@ public final class NsoInspectorTest {
     public void parsesCompressedNsoImportsStartupExportAndRelocations() throws Exception {
         byte[] raw = makeNso();
         String report = NsoInspector.inspect(new ByteArrayInputStream(raw), "exefs/main", raw.length);
+        System.out.println("SYNTHETIC NSO REPORT:\\n" + report);
 
         assertNotNull(report);
         assertTrue(report, report.contains("1 imports, 1 exports, 1 relocations"));
