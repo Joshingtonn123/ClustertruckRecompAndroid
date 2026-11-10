@@ -519,6 +519,18 @@ static void android_call(const char *method) {  // a static method of the activi
     env->DeleteLocalRef(act);
 }
 
+static void android_call_bool(const char *method, bool value) {  // a static method taking one boolean
+    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+    jobject act = (jobject)SDL_GetAndroidActivity();
+    if (!env || !act) return;
+    jclass c = env->GetObjectClass(act);
+    jmethodID m = env->GetStaticMethodID(c, method, "(Z)V");
+    if (m) env->CallStaticVoidMethod(c, m, value ? JNI_TRUE : JNI_FALSE);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    env->DeleteLocalRef(c);
+    env->DeleteLocalRef(act);
+}
+
 // The log file (Driver compatibility; runtime/platform/android.c): written to a folder the player picks
 // (LASRecompActivity pickLogFolder / openLog), where a file manager can open it - Android/data/ is out of its reach
 extern "C" void android_log_file(bool on);
@@ -1688,7 +1700,7 @@ static void prelaunch_tab(float sc) {
         ImGui::PopTextWrapPos();
         bool busy_now = g_busy;
         ImGui::BeginDisabled(busy_now);
-        if (ImGui::Button(tr("Add another version"))) android_call("pickGameFolder");
+        if (ImGui::Button(tr("Add another version"))) android_call_bool("chooseGameSource", false);
         for (const std::string &o : others) {
             if (is_base_release(o)) continue;
             char label[48];
@@ -2376,8 +2388,8 @@ extern "C" void launcher_run(const char *root) {
 #endif
                     if (busy) opt_disable_next();
 #ifdef __ANDROID__
-                    if (opt_action("Game files folder", tr(src_v.c_str()), src_d.c_str(), true))
-                        android_call(g_settings.files_in_place ? "pickGameFolderInPlace" : "pickGameFolder");
+                    if (opt_action("Game files source", tr(src_v.c_str()), src_d.c_str(), true))
+                        android_call_bool("chooseGameSource", g_settings.files_in_place);
 #else
                     if (opt_action("Game files folder", src_v.c_str(), src_d.c_str(), true))
                         SDL_ShowOpenFolderDialog(picked, NULL, win, NULL, false);
@@ -2414,7 +2426,7 @@ extern "C" void launcher_run(const char *root) {
                                        "the ones here: PLAY \xe2\x80\xb9 \xe2\x80\xba on the start screen then switches between them. "
                                        "Each release takes its own space and builds its own game code once; saves are shared. The "
                                        "same release set up again replaces its copy.", true))
-                            android_call("pickGameFolder");
+                            android_call_bool("chooseGameSource", false);
                         first_row();
                         for (const std::string &o : others) {
                             if (is_base_release(o)) continue;
