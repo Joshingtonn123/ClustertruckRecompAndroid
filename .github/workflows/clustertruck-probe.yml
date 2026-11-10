@@ -49,7 +49,6 @@ jobs:
 
 
   android-full-app:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[full-android-build]')
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
