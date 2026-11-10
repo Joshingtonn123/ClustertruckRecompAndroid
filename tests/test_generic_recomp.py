@@ -62,6 +62,7 @@ class GenericNsoRecompTests(unittest.TestCase):
         self.assertIn("Generic recompilation finished", launcher)
         self.assertIn("boolean compileOnly = romfs == null && romfsBin == null;", activity)
         self.assertIn("nativeImportDone(6)", activity)
+        self.assertIn("copied = reported = 0;", activity)
         self.assertIn('named(kids, "sdk") != null', activity)
 
     def test_android_gamebuild_uses_generic_mode_for_main_only(self):

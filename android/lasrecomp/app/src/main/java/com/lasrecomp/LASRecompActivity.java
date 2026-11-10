@@ -828,6 +828,7 @@ public class LASRecompActivity extends SDLActivity {
                     throw new IOException("Choose the original extracted ExeFS folder, not the app's own imported files.");
             }
             if (compileOnly) {
+                copied = reported = 0;
                 long exefsBytes = treeBytes(tree, exefs);
                 total = exefsBytes;
                 long needed = ImportStorage.requiredBytes(exefsBytes, 0);

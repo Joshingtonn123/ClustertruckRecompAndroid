@@ -20,7 +20,7 @@ SDK=${SDK//\\//}
 NDK=${ANDROID_NDK:-$SDK/ndk/30.0.16248370}
 CMAKE_DIR=$SDK/cmake/3.30.4/bin
 API=30
-JOBS=$(nproc 2>/dev/null || echo 8)
+JOBS=${BUILD_JOBS:-$(nproc 2>/dev/null || echo 8)}
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE=.exe ;; *) EXE= ;; esac
 CMAKE=$CMAKE_DIR/cmake$EXE
 ANDROID_CMAKE=(-G Ninja -DCMAKE_MAKE_PROGRAM="$CMAKE_DIR/ninja$EXE" -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake"
