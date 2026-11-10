@@ -91,3 +91,32 @@ The successful run is [workflow run 42807069464](https://github.com/Joshingtonn1
 ## Current status
 
 **Diagnostic tooling and the earlier Android 11+ probe APK are built and CI-tested. A newer XCI HFS0 directory-inspection change is committed but still needs a fresh Android CI build and a test against the user's XCI. Clustertruck game compatibility is not yet established.** No Clustertruck Switch executable has yet been analyzed by this repository, no Clustertruck game-code library has been generated, and no playable Clustertruck APK has been built or tested. The next decision depends on a report from the actual Switch build.
+
+
+## Reusable foundation already present in the untouched `main` branch
+
+The upstream-derived `main` branch is still the LASRecompAndroid base; it has not been changed for this Clustertruck work. Its current README and source describe a substantial Android recompilation stack, including several improvements explicitly adapted from BOTWRecompAndroid. This is a stronger starting point than a minimal LAS snapshot, but it remains a Link's Awakening implementation.
+
+### Candidate components to preserve or adapt
+
+- **Android platform shell:** Android activity/lifecycle, SDL3 window/input/audio integration, Gradle/NDK setup, touch controls, controller support, settings and file-picker patterns.
+- **Graphics foundation:** Vulkan device/swapchain management, NVN command translation, shader translation, render-thread scheduling, render-target management and compatibility fallbacks for Vulkan 1.1/1.2 drivers. These are candidates only if Clustertruck's Switch renderer is NVN-compatible.
+- **ARM64 recompilation infrastructure:** NSO/AArch64 parsing and lifting, native code generation, memory/runtime support and HLE scaffolding. These can be evaluated only after the actual Clustertruck executable and imports are identified.
+- **BOTW-derived Android improvements already documented upstream:** native ARM64 game-code mode, GPU arena/copy tracking for drivers without direct GPU heap mapping, classic render-pass fallback, and other Mali/stock-driver paths. We should reuse these existing implementations where their assumptions match Clustertruck, rather than reimplementing them.
+- **Build and diagnostics:** Android build configuration, dependency build scripts, CI patterns, logging and performance instrumentation.
+
+### What cannot be carried over unchanged
+
+The current game-version/build-ID recognition, Zelda address and patch tables, Zelda-specific HLE assumptions, save/data formats, game setup validation, launcher text and game-specific runtime behavior must not be treated as Clustertruck support. A Unity title may also require a different executable/runtime integration path from Link's Awakening. The WebGL scan is not enough to decide whether the Switch build is Mono or IL2CPP.
+
+### Reuse decision for Clustertruck
+
+1. Keep `main` untouched and make all experiments on `clustertruck-dev`.
+2. Preserve the reusable Android/Vulkan/SDL infrastructure while mapping each dependency to a confirmed Clustertruck requirement.
+3. Do not transplant BOTW or TOTK title-specific code or game data. Reuse only general engine/platform improvements whose interfaces and assumptions match.
+4. First obtain non-sensitive metadata from a legitimately extracted executable (format, architecture, build ID, imports, Unity version/backend and graphics interface). The current XCI report only describes the outer HFS0 directory and cannot answer these questions.
+5. Only then decide whether the LAS static recompiler can lift Clustertruck's executable, whether the NVN renderer can be reused, and which title-specific runtime pieces must be replaced.
+
+### Mali G85 and the user's Mali-G76 MC4
+
+The user's Helio G90T uses a Mali-G76 MC4, not the Mali-G52 MC2 commonly paired with Helio G85. The G76 MC4 is a different and generally stronger GPU configuration, so a demonstrated working path on a G85 would be encouraging evidence, not a guarantee. Vulkan extension support, driver behavior, memory bandwidth, CPU load, game workload and thermal limits still determine whether it boots and how well it runs. The upstream LAS README currently reports 20–30 fps on a Mali-G615 and says that more real Mali devices still need confirmation; that is not a benchmark for this Clustertruck port or a verified G85/G76 result.
