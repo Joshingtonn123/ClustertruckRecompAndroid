@@ -6,6 +6,10 @@ import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.view.Gravity;
+import android.widget.Toast;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
@@ -44,6 +48,8 @@ public final class MainActivity extends Activity {
     private static final int MAX_TEXT_SAMPLE = 2 * 1024 * 1024;
 
     private TextView reportView;
+    private TextView statusView;
+    private Button playButton;
     private Button packageButton;
     private Button folderButton;
     private Button shareButton;
@@ -58,60 +64,182 @@ public final class MainActivity extends Activity {
     }
 
     private void buildUi() {
+        getWindow().setStatusBarColor(Color.rgb(10, 13, 19));
+        getWindow().setNavigationBarColor(Color.rgb(10, 13, 19));
+        getWindow().getDecorView().setSystemUiVisibility(0);
+
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(16), dp(16), dp(16), dp(12));
+        page.setPadding(dp(18), dp(12), dp(18), dp(12));
+        page.setBackgroundColor(Color.rgb(10, 13, 19));
 
-        TextView title = new TextView(this);
-        title.setText("Clustertruck Switch Dump Probe");
-        title.setTextSize(21);
-        title.setPadding(0, 0, 0, dp(8));
-        page.addView(title);
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        TextView mark = makeText("CT", 16, Color.rgb(10, 13, 19), true);
+        mark.setGravity(Gravity.CENTER);
+        mark.setBackground(roundRect(Color.rgb(255, 174, 55), dp(12)));
+        header.addView(mark, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        LinearLayout heading = new LinearLayout(this);
+        heading.setOrientation(LinearLayout.VERTICAL);
+        heading.setPadding(dp(11), 0, 0, 0);
+        TextView appTitle = makeText("CLUSTERTRUCK", 17, Color.WHITE, true);
+        TextView appSub = makeText("ANDROID RECOMP  •  DEVELOPMENT BUILD", 9, Color.rgb(145, 157, 174), true);
+        heading.addView(appTitle);
+        heading.addView(appSub);
+        header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView version = makeText("DEV 0.1", 10, Color.rgb(255, 190, 100), true);
+        version.setPadding(dp(10), dp(7), dp(10), dp(7));
+        version.setBackground(roundRect(Color.rgb(42, 34, 25), dp(9)));
+        header.addView(version);
+        page.addView(header);
 
-        TextView explanation = new TextView(this);
-        explanation.setText(
-                "Inspect your own .NSP / .XCI file, or an already-extracted Switch game folder. " +
-                "This tool only reads metadata; it does not decrypt or extract game contents."
-        );
-        explanation.setTextSize(14);
-        explanation.setPadding(0, 0, 0, dp(12));
-        page.addView(explanation);
+        View line = new View(this);
+        line.setBackgroundColor(Color.rgb(36, 44, 56));
+        LinearLayout.LayoutParams lineParams = new LinearLayout.LayoutParams(-1, dp(1));
+        lineParams.topMargin = dp(10);
+        lineParams.bottomMargin = dp(12);
+        page.addView(line, lineParams);
 
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.HORIZONTAL);
+        content.setGravity(Gravity.FILL);
+        page.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        left.setPadding(dp(16), dp(15), dp(16), dp(14));
+        left.setBackground(roundRect(Color.rgb(22, 28, 38), dp(18)));
+        content.addView(left, new LinearLayout.LayoutParams(0, -1, 0.43f));
+
+        TextView eyebrow = makeText("HIGH SPEED  /  PRECISION PLATFORMER", 9, Color.rgb(255, 183, 79), true);
+        left.addView(eyebrow);
+        TextView heroTitle = makeText("READY TO\nRUN?", 30, Color.WHITE, true);
+        heroTitle.setLineSpacing(0, 0.92f);
+        LinearLayout.LayoutParams heroParams = new LinearLayout.LayoutParams(-1, -2);
+        heroParams.topMargin = dp(9);
+        left.addView(heroTitle, heroParams);
+        TextView heroDesc = makeText("Your Clustertruck Android project hub. Import a dump to inspect its visible package metadata.", 12, Color.rgb(177, 188, 203), false);
+        heroDesc.setLineSpacing(dp(2), 1.0f);
+        LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(-1, 0, 1);
+        descParams.topMargin = dp(8);
+        left.addView(heroDesc, descParams);
+
+        playButton = new Button(this);
+        playButton.setText("▶   PLAY");
+        playButton.setTextSize(15);
+        playButton.setTextColor(Color.rgb(20, 22, 25));
+        playButton.setAllCaps(false);
+        playButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        playButton.setBackground(roundRect(Color.rgb(255, 174, 55), dp(13)));
+        playButton.setOnClickListener(v -> Toast.makeText(this,
+                "The Clustertruck game runtime is not integrated yet. PLAY is a placeholder for now.",
+                Toast.LENGTH_LONG).show());
+        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, dp(48));
+        playParams.topMargin = dp(10);
+        left.addView(playButton, playParams);
+
+        statusView = makeText("●  RUNTIME NOT READY  •  DUMP INSPECTOR ACTIVE", 9, Color.rgb(255, 190, 100), true);
+        statusView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(-1, -2);
+        statusParams.topMargin = dp(8);
+        left.addView(statusView, statusParams);
+
+        LinearLayout right = new LinearLayout(this);
+        right.setOrientation(LinearLayout.VERTICAL);
+        right.setPadding(dp(14), dp(12), dp(14), dp(10));
+        right.setBackground(roundRect(Color.rgb(16, 21, 29), dp(18)));
+        LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(0, -1, 0.57f);
+        rightParams.leftMargin = dp(12);
+        content.addView(right, rightParams);
+
+        LinearLayout tools = new LinearLayout(this);
+        tools.setOrientation(LinearLayout.HORIZONTAL);
+        tools.setGravity(Gravity.CENTER_VERTICAL);
+        TextView reportTitle = makeText("DUMP INSPECTOR", 13, Color.WHITE, true);
+        tools.addView(reportTitle, new LinearLayout.LayoutParams(0, -2, 1));
         packageButton = new Button(this);
-        packageButton.setText("Inspect .NSP / .XCI file");
+        styleSmallButton(packageButton, "OPEN FILE");
         packageButton.setOnClickListener(v -> pickPackage());
-        page.addView(packageButton);
-
+        tools.addView(packageButton);
         folderButton = new Button(this);
-        folderButton.setText("Inspect extracted game folder");
+        styleSmallButton(folderButton, "OPEN FOLDER");
+        LinearLayout.LayoutParams folderParams = new LinearLayout.LayoutParams(-2, dp(36));
+        folderParams.leftMargin = dp(6);
+        folderButton.setLayoutParams(folderParams);
         folderButton.setOnClickListener(v -> pickFolder());
-        page.addView(folderButton);
+        tools.addView(folderButton);
+        right.addView(tools);
+
+        TextView reportHint = makeText("NSP / XCI CONTAINER DETAILS  •  READ-ONLY", 9, Color.rgb(129, 145, 164), true);
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
+        hintParams.topMargin = dp(4);
+        right.addView(reportHint, hintParams);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        reportView = makeText("NO REPORT YET\n\nChoose OPEN FILE to inspect your .NSP / .XCI package, or OPEN FOLDER to scan an already-extracted game directory.\n\nThis build reads visible metadata only. It does not decrypt, extract, patch, or run game files.", 11, Color.rgb(185, 196, 210), false);
+        reportView.setTypeface(Typeface.MONOSPACE);
+        reportView.setTextIsSelectable(true);
+        reportView.setPadding(dp(12), dp(12), dp(12), dp(12));
+        reportView.setBackground(roundRect(Color.rgb(10, 14, 20), dp(12)));
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, 0, 1);
+        scrollParams.topMargin = dp(10);
+        right.addView(scroll, scrollParams);
+        scroll.addView(reportView);
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         shareButton = new Button(this);
-        shareButton.setText("Share report");
+        styleSmallButton(shareButton, "SHARE REPORT");
         shareButton.setEnabled(false);
         shareButton.setOnClickListener(v -> shareReport());
-        actions.addView(shareButton, new LinearLayout.LayoutParams(0, -2, 1));
-
+        actions.addView(shareButton, new LinearLayout.LayoutParams(0, dp(36), 1));
         copyButton = new Button(this);
-        copyButton.setText("Copy report");
+        styleSmallButton(copyButton, "COPY REPORT");
         copyButton.setEnabled(false);
         copyButton.setOnClickListener(v -> copyReport());
-        actions.addView(copyButton, new LinearLayout.LayoutParams(0, -2, 1));
-        page.addView(actions);
+        LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(0, dp(36), 1);
+        copyParams.leftMargin = dp(7);
+        actions.addView(copyButton, copyParams);
+        LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(-1, -2);
+        actionsParams.topMargin = dp(8);
+        right.addView(actions, actionsParams);
 
-        ScrollView scroll = new ScrollView(this);
-        reportView = new TextView(this);
-        reportView.setTextSize(12);
-        reportView.setTypeface(android.graphics.Typeface.MONOSPACE);
-        reportView.setTextIsSelectable(true);
-        reportView.setPadding(0, dp(12), 0, dp(12));
-        reportView.setText("No report yet.\n\nChoose a package file or an extracted game folder.");
-        scroll.addView(reportView);
-        page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        TextView footer = makeText("CLUSTERTRUCK RECOMP  •  LANDSCAPE UI  •  ANDROID 11+", 8, Color.rgb(92, 105, 123), true);
+        footer.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams footerParams = new LinearLayout.LayoutParams(-1, -2);
+        footerParams.topMargin = dp(8);
+        page.addView(footer, footerParams);
         setContentView(page);
+    }
+
+    private TextView makeText(String value, int size, int color, boolean bold) {
+        TextView text = new TextView(this);
+        text.setText(value);
+        text.setTextSize(size);
+        text.setTextColor(color);
+        if (bold) text.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        return text;
+    }
+
+    private GradientDrawable roundRect(int color, int radius) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(radius);
+        return drawable;
+    }
+
+    private void styleSmallButton(Button button, String label) {
+        button.setText(label);
+        button.setTextSize(9);
+        button.setTextColor(Color.rgb(222, 231, 241));
+        button.setAllCaps(false);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setPadding(dp(8), 0, dp(8), 0);
+        button.setMinWidth(0);
+        button.setBackground(roundRect(Color.rgb(37, 47, 61), dp(9)));
+        button.setLayoutParams(new LinearLayout.LayoutParams(-2, dp(36)));
     }
 
     private int dp(int value) {
