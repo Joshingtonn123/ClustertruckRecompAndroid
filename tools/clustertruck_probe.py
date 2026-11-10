@@ -11,10 +11,13 @@ import argparse
 import hashlib
 import json
 import os
+import struct
 import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 try:
     from nso import Nso
@@ -146,7 +149,7 @@ def parse_pfs0(path: Path, max_entries: int = 4096) -> dict[str, Any]:
         header = stream.read(0x10)
         if len(header) != 0x10 or header[:4] != b"PFS0":
             raise ValueError("not a PFS0 container")
-        file_count, string_size, _reserved = __import__("struct").unpack_from("<III", header, 4)
+        file_count, string_size, _reserved = struct.unpack_from("<III", header, 4)
         if file_count > max_entries:
             raise ValueError(f"PFS0 entry count {file_count} exceeds safety limit {max_entries}")
         table_size = file_count * 0x18
