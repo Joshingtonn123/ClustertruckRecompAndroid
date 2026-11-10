@@ -47,7 +47,7 @@ python tools/clustertruck_probe.py /path/to/already-extracted/Clustertruck --jso
 A separate app is at `android/clustertruck-probe/`. It uses Android's document picker so the user can select a package file or an already-extracted folder without granting broad storage access.
 
 - For PFS0/NSP it reads only the package directory table and lists names/sizes; it does not read NCA payloads.
-- For XCI it checks the outer header only; no partition extraction is performed.
+- For XCI it reads the root HFS0 directory and visible `secure` / `normal` / `update` / `logo` partition directory entries, including NCA filenames, sizes and first-byte signatures where available. It does not decrypt NCA payloads or extract game content.
 - For an already-extracted directory it looks for NSO0 headers and reports build IDs, segment metadata, `main.npdm` SHA-256, and Unity/IL2CPP/Mono path/string clues.
 - Reports can be copied or shared from the app.
 
@@ -90,4 +90,4 @@ The successful run is [workflow run 42807069464](https://github.com/Joshingtonn1
 
 ## Current status
 
-**Diagnostic tooling and the Android 11+ probe APK are built and CI-tested; Clustertruck game compatibility is not yet established.** No Clustertruck Switch executable has yet been analyzed by this repository, no Clustertruck game-code library has been generated, and no playable Clustertruck APK has been built or tested. The next decision depends on a report from the actual Switch build.
+**Diagnostic tooling and the earlier Android 11+ probe APK are built and CI-tested. A newer XCI HFS0 directory-inspection change is committed but still needs a fresh Android CI build and a test against the user's XCI. Clustertruck game compatibility is not yet established.** No Clustertruck Switch executable has yet been analyzed by this repository, no Clustertruck game-code library has been generated, and no playable Clustertruck APK has been built or tested. The next decision depends on a report from the actual Switch build.
