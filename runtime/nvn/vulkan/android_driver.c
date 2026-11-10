@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "vk.h"
+#include "device_compat.h"
 
 // Does this driver offer a Vulkan GPU at all? (Turnip v26.0.0 R8, built for the A7xx: none on an Adreno 830 - the app
 // stopped at "no Vulkan device" on every start, its settings out of reach.) 1.1 and up: below 1.3 device.c checks the
