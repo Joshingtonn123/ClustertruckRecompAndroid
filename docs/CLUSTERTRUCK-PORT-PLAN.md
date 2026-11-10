@@ -149,3 +149,8 @@ The Android diagnostic app now exposes its existing read-only extracted-folder s
 ### Current blocker and next deliverable
 
 The XCI/HFS0 report and WebGL scan do not contain enough Switch-specific evidence to safely generate Clustertruck game code. The next useful report is from an already-extracted copy of the Switch build, especially the ExeFS `main`/SDK module headers and visible Unity data filenames/metadata. Once that evidence exists, the project can make a grounded choice between adapting the current NSO lifter, adopting a more Unity-oriented static recompilation pipeline, or taking a different route. Until then, claiming that an APK will boot would be misleading.
+
+
+### Extra metadata now collected by the phone scanner
+
+The extracted-folder scanner now reads the fixed 8-byte header of `global-metadata.dat` independently of the general text-scan size limit. It checks the IL2CPP metadata magic (`0xFAB11BAF`) and reports the metadata version only when that magic is present. It also records Unity-style version-string candidates from the leading bytes of `globalgamemanagers`, `boot.config` and `.assets` files. These are stronger leads than plain filename matches, but the report still labels Unity version values as candidates and does not assume the WebGL and Switch builds match.

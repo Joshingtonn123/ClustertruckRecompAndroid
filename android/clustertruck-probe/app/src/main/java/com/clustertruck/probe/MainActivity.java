@@ -35,6 +35,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A small Android 11+ metadata probe for a user's own Clustertruck Switch dump.
@@ -48,6 +50,10 @@ public final class MainActivity extends Activity {
     private static final int MAX_FILES = 100_000;
     private static final long MAX_TEXT_SCAN_BYTES = 128L * 1024L * 1024L;
     private static final int MAX_TEXT_SAMPLE = 2 * 1024 * 1024;
+    private static final int IL2CPP_METADATA_MAGIC = (int) 0xFAB11BAF;
+    private static final Pattern UNITY_VERSION_PATTERN = Pattern.compile(
+            "(?<![0-9])[0-9]{1,4}\\.[0-9]{1,2}\\.[0-9]{1,3}[abfp][0-9]+(?![0-9])",
+            Pattern.CASE_INSENSITIVE);
 
     private TextView reportView;
     private TextView statusView;
@@ -593,6 +599,12 @@ public final class MainActivity extends Activity {
             for (String item : scan.nsoReports) out.append("  ").append(item).append('\n');
         }
         if (scan.npdmReport != null) out.append("\n").append(scan.npdmReport).append('\n');
+        if (scan.il2cppMetadataReport != null)
+            out.append("\nIL2CPP metadata header:\n  ").append(scan.il2cppMetadataReport).append('\n');
+
+        out.append("\nUnity version-string candidates (from Unity file headers):\n");
+        if (scan.unityVersionCandidates.isEmpty()) out.append("  none found\n");
+        else for (String item : scan.unityVersionCandidates) out.append("  ").append(item).append('\n');
 
         out.append("\nUnity filename evidence:\n");
         if (scan.pathEvidence.isEmpty()) out.append("  none found\n");
@@ -628,6 +640,8 @@ public final class MainActivity extends Activity {
         boolean hasIl2cpp;
         boolean hasMono;
         String npdmReport;
+        String il2cppMetadataReport;
+        final List<String> unityVersionCandidates = new ArrayList<>();
         final List<String> nsoReports = new ArrayList<>();
         final List<String> pathEvidence = new ArrayList<>();
         final List<String> textEvidence = new ArrayList<>();
@@ -696,6 +710,15 @@ public final class MainActivity extends Activity {
         }
 
         String basename = lower.substring(lower.lastIndexOf('/') + 1);
+        if ("global-metadata.dat".equals(basename) && scan.il2cppMetadataReport == null) {
+            try (InputStream input = getContentResolver().openInputStream(uri)) {
+                if (input == null) throw new IOException("file could not be opened");
+                scan.il2cppMetadataReport = describeIl2CppMetadataHeader(readAtMost(input, 8), path);
+            } catch (Exception error) {
+                scan.il2cppMetadataReport = path + " — metadata header read failed: " + error.getMessage();
+            }
+        }
+
         if ("main".equals(basename) || basename.endsWith(".nso") || basename.startsWith("subsdk")) {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
                 if (input != null) {
@@ -723,7 +746,8 @@ public final class MainActivity extends Activity {
 
         boolean textCandidate = basename.endsWith(".assets") || basename.endsWith(".resource") ||
                 basename.endsWith(".bundle") || basename.endsWith(".dat") || basename.endsWith(".dll") ||
-                basename.endsWith(".config") || basename.equals("main") || basename.equals("boot.config");
+                basename.endsWith(".config") || basename.equals("main") || basename.equals("boot.config") ||
+                basename.equals("globalgamemanagers");
         if (textCandidate && size >= 0 && size <= MAX_TEXT_SAMPLE &&
                 scan.textBytes + size <= MAX_TEXT_SCAN_BYTES) {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
@@ -745,7 +769,20 @@ public final class MainActivity extends Activity {
     }
 
     private static void collectTextMarkers(FolderScan scan, String path, byte[] data) {
-        String sample = new String(data, StandardCharsets.ISO_8859_1).toLowerCase(Locale.ROOT);
+        String rawSample = new String(data, StandardCharsets.ISO_8859_1);
+        String sample = rawSample.toLowerCase(Locale.ROOT);
+        String lowerPath = path.toLowerCase(Locale.ROOT);
+        boolean likelyUnityHeader = lowerPath.contains("globalgamemanagers") ||
+                lowerPath.endsWith("/boot.config") || lowerPath.endsWith(".assets");
+        if (likelyUnityHeader && scan.unityVersionCandidates.size() < 32) {
+            Matcher versionMatcher = UNITY_VERSION_PATTERN.matcher(
+                    rawSample.substring(0, Math.min(rawSample.length(), 256)));
+            if (versionMatcher.find()) {
+                String candidate = path + " — " + versionMatcher.group();
+                if (!scan.unityVersionCandidates.contains(candidate))
+                    scan.unityVersionCandidates.add(candidate);
+            }
+        }
         StringBuilder markers = new StringBuilder();
         String[] tokens = {"unityplayer", "unityengine", "unityfs", "globalgamemanagers",
                 "il2cpp", "assembly-csharp", "mono-2.0", "libnn_gfx", "nvn"};
@@ -759,6 +796,17 @@ public final class MainActivity extends Activity {
         }
         if (markers.length() > 0 && scan.textEvidence.size() < 100)
             scan.textEvidence.add(path + " — " + markers);
+    }
+
+    private static String describeIl2CppMetadataHeader(byte[] header, String path) {
+        if (header.length < 8) return path + " — truncated metadata header (" + header.length + " bytes)";
+        int magic = littleInt(header, 0);
+        if (magic != IL2CPP_METADATA_MAGIC) {
+            return path + " — expected IL2CPP metadata magic not found (0x" +
+                    Integer.toUnsignedString(magic, 16) + ")";
+        }
+        long version = Integer.toUnsignedLong(littleInt(header, 4));
+        return path + " — IL2CPP metadata magic confirmed; metadata version " + version;
     }
 
     private static String describeNsoHeader(byte[] header, String path) {
