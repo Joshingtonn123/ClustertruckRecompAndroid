@@ -21,8 +21,8 @@ The latest successful workflow produces an artifact named **`clustertruck-dump-p
 ### What the diagnostic app does
 
 1. **Inspect .NSP** — reads the outer PFS0 directory and lists visible filenames and sizes. It does not open, decrypt or extract the NCA payloads.
-2. **Inspect .XCI** — checks the cartridge image header only. It does not unpack its partitions.
-3. **Inspect an already-extracted folder** — looks for NSO executable headers/build IDs, segment metadata, `main.npdm`, and Unity/IL2CPP/Mono-related filenames and strings.
+2. **Inspect .XCI** — reads the cartridge header and visible HFS0 directory metadata for its partitions, listing names, sizes and file signatures. It does not decrypt or extract NCA payloads.
+3. **Inspect a standalone NSO** — reports its visible build ID, flags, BSS size, and text/rodata/data segment offsets and sizes from the header.
 4. **Scan an already-extracted folder** — choose Settings → Scan an already-extracted game folder. The app recursively checks a bounded number of filenames and small file samples, reports visible NSO build IDs and Unity/IL2CPP/Mono clues, and computes a hash for `main.npdm` when present. It does not decrypt, unpack, patch, or modify files.
 5. **Share report** — copies or shares the text report so the Switch executable can be assessed without uploading the game dump.
 
