@@ -50,6 +50,11 @@ static const struct { const char *key; uint64_t from, to, delta; } moves[] = {
 
 const GameAddrs *g_ga;
 static const GameVersion *g_version;
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+// The Android Clustertruck target has no verified title-address map. Keep GA() safe to read,
+// but leave every title-specific slot disabled (zero); Clustertruck hooks must not use these.
+static const GameAddrs ga_generic = {0};
+#endif
 #ifdef __ANDROID__
 static GameAddrs g_moved;  // the selected table with its guest addresses in the guest window (rt.h GUEST_LO)
 #endif
@@ -78,8 +83,14 @@ static bool read_build_id(const char *path, uint8_t id[20]) {
 }
 
 const GameVersion *game_version_of_main(const char *main_path) {
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    // Never mistake a Clustertruck executable for one of the fork's Zelda profiles.
+    (void)main_path;
+    return NULL;
+#else
     uint8_t id[20];
     return read_build_id(main_path, id) ? game_version_by_build_id(id) : NULL;
+#endif
 }
 
 const GameVersion *game_version_of(const char *game_dir) {
@@ -170,6 +181,16 @@ bool game_version_select(const char *game_dir, char *why, size_t why_size) {
         snprintf(why, why_size, "the game files' exefs/main is missing or unreadable");
         return false;
     }
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    // This Android target is not a Zelda build. Accept any well-formed NSO main module,
+    // but deliberately select no Zelda address/version table.
+    char build_id[41];
+    for (int i = 0; i < 20; i++) snprintf(build_id + i * 2, 3, "%02X", id[i]);
+    g_version = NULL;
+    g_ga = &ga_generic;
+    LOG("[game] generic Clustertruck profile (main build ID %s); title-specific address tables disabled\n", build_id);
+    return true;
+#else
     const GameVersion *v = game_version_by_build_id(id);
     if (!v) {
         snprintf(why, why_size, "these game files are an unsupported version of the game (main build ID "
@@ -190,6 +211,7 @@ bool game_version_select(const char *game_dir, char *why, size_t why_size) {
     LOG("[game] version %s (main build ID %.16s, address table %s)\n",
         game_release_label(exefs, label, sizeof label), v->build_id, v->key);
     return true;
+#endif
 }
 
 const GameVersion *game_version(void) { return g_version; }

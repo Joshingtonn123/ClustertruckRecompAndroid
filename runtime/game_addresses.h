@@ -1,6 +1,6 @@
 // Guest addresses of the game's code and data, per game version (game_addresses/versions.h). GA(NAME) is the
-// selected version's address: game_version_select (runtime/game_addresses.c) picks the table by the main program's
-// build ID when the game boots, before any game code runs. Unknown build IDs are refused: there is no fallback table.
+// selected version's address: game_version_select (runtime/game_addresses.c) normally picks the table by build ID.
+// The Clustertruck Android target instead selects an all-zero generic table and must not call title-specific hooks.
 // On Android the selected table is a copy moved with the guest window (rt.h: GUEST_LO), so GA(NAME) is always where
 // the game is now.
 #pragma once

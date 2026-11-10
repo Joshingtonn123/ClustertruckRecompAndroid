@@ -12,12 +12,13 @@ This branch explores a genuine Nintendo Switch 1 → Android recompilation of Cl
 The `clustertruck-dev` branch now contains:
 
 - A generic NSO-to-C generator mode which bypasses Zelda-only build-ID and instruction-patch assumptions for the main module.
+- The Android runtime is compiled with a Clustertruck generic-title profile: it accepts a valid NSO main module without selecting the fork's Zelda address tables, and disables Zelda version matching / hot-function hints. The generic address table is all-zero, so title-specific hooks are not safe to call.
 - Android game-code builder integration that invokes generic mode for the main NSO and avoids Zelda-specific hot-function hints for an unknown title.
 - An Android ExeFS-only import path which accepts an already-extracted folder containing Switch `main` and `sdk`, then runs generic code generation without requiring Zelda's RomFS files. It reports compilation separately and deliberately does not attempt to boot the result.
 - A Switch-only read-only probe for visible XCI/NSP directory metadata, NSO module headers/build IDs, and `main.npdm`.
 - CI tests, a diagnostic app build, and a full Android app build job that validates the code-generation importer and native runtime build.
 
-The generic generator is tested with a synthetic NSO containing a function that returns. This proves the generic generator path can emit C for an unknown build ID; it does not prove the real Clustertruck executable is supported. The actual Switch `main` and `sdk` modules still need to be analyzed.
+The generic generator is tested with a synthetic NSO containing a function that returns. This proves the generic generator path can emit C for an unknown build ID; it does not prove the real Clustertruck executable is supported. The actual Switch `main` and `sdk` modules still need to be analyzed. The generic profile removes one known boot-time rejection only; the loader, startup symbol, Unity-facing service imports, NVN behavior and any extra ExeFS modules remain unverified.
 
 ## Diagnostic app
 
