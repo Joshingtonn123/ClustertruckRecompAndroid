@@ -78,7 +78,7 @@ def classify_magic(prefix: bytes) -> str:
         return "XCI cartridge image header"
     if prefix.startswith((b"NCA2", b"NCA3")) or prefix[0x200:0x204] in (b"NCA2", b"NCA3"):
         return "NCA content archive (may be encrypted)"
-    if prefix.startswith(b"ELF\x7f"):
+    if prefix.startswith(b"\x7fELF"):
         return "ELF executable"
     if prefix.startswith(b"MZ"):
         return "Windows PE executable"
