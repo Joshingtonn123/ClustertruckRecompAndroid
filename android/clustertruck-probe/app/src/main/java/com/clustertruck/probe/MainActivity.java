@@ -1,6 +1,7 @@
 package com.clustertruck.probe;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ContentResolver;
@@ -41,6 +42,7 @@ import java.util.Locale;
  */
 public final class MainActivity extends Activity {
     private static final int REQUEST_PACKAGE = 1001;
+    private static final int REQUEST_FOLDER = 1002;
     private static final int MAX_PFS0_ENTRIES = 8192;
     private static final int MAX_STRING_TABLE = 4 * 1024 * 1024;
     private static final int MAX_FILES = 100_000;
@@ -169,20 +171,18 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(-2, dp(36));
         settingsParams.leftMargin = dp(6);
         settingsButton.setLayoutParams(settingsParams);
-        settingsButton.setOnClickListener(v -> Toast.makeText(this,
-                "Settings are not available in this development build yet.",
-                Toast.LENGTH_SHORT).show());
+        settingsButton.setOnClickListener(v -> showToolsDialog());
         tools.addView(settingsButton);
         right.addView(tools);
 
-        TextView reportHint = makeText("NSP / XCI CONTAINER DETAILS  •  READ-ONLY", 9, Color.rgb(129, 145, 164), true);
+        TextView reportHint = makeText("NSP / XCI DETAILS  •  FOLDER SCAN IN SETTINGS  •  READ-ONLY", 9, Color.rgb(129, 145, 164), true);
         LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
         hintParams.topMargin = dp(4);
         right.addView(reportHint, hintParams);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        reportView = makeText("NO REPORT YET\n\nChoose OPEN FILE to inspect your .NSP or .XCI package.\n\nPLAY stays locked until a supported package is selected. This build reads visible metadata only; the game runtime is not integrated yet.", 11, Color.rgb(185, 196, 210), false);
+        reportView = makeText("NO REPORT YET\n\nChoose OPEN FILE to inspect your .NSP or .XCI package. Or open SETTINGS to scan an already-extracted game folder for NSO build IDs and Unity runtime clues.\n\nThis is a read-only diagnostic build; the Clustertruck game runtime is not integrated yet.", 11, Color.rgb(185, 196, 210), false);
         reportView.setTypeface(Typeface.MONOSPACE);
         reportView.setTextIsSelectable(true);
         reportView.setPadding(dp(12), dp(12), dp(12), dp(12));
@@ -284,7 +284,35 @@ public final class MainActivity extends Activity {
         Uri uri = data.getData();
         if (requestCode == REQUEST_PACKAGE) {
             inspectAsync("Inspecting package metadata…", () -> inspectPackage(uri));
+        } else if (requestCode == REQUEST_FOLDER) {
+            inspectAsync("Scanning the selected extracted folder…", () -> inspectFolder(uri));
         }
+    }
+
+    private void showToolsDialog() {
+        if (scanning) return;
+        CharSequence[] actions = {
+                "Scan an already-extracted game folder",
+                "Settings (not available yet)"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Development tools")
+                .setItems(actions, (dialog, which) -> {
+                    if (which == 0) {
+                        pickExtractedFolder();
+                    } else {
+                        Toast.makeText(this, "Settings are not available in this development build yet.",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
+    }
+
+    private void pickExtractedFolder() {
+        if (scanning) return;
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent, REQUEST_FOLDER);
     }
 
     private interface Inspection {
