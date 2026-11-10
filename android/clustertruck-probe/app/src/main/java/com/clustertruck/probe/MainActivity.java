@@ -153,6 +153,9 @@ public final class MainActivity extends Activity {
         if (scanning) return;
         scanning = true;
         setButtonsEnabled(false);
+        shareButton.setEnabled(false);
+        copyButton.setEnabled(false);
+        lastReport = "";
         reportView.setText(status);
         new Thread(() -> {
             String result;
@@ -200,15 +203,16 @@ public final class MainActivity extends Activity {
                 byte[] header = new byte[0x80];
                 System.arraycopy(magic, 0, header, 0, 4);
                 readFully(raw, header, 4, header.length - 4);
-                appendNsoHeader(out, header);
-            } else if ("UnityFS".equals(firstFour)) {
-                out.append("Container: UnityFS asset bundle\n");
+                String nsoInfo = describeNsoHeader(header, name);
+                if (nsoInfo != null) out.append(nsoInfo).append('\n');
             } else {
                 byte[] tail = readAtMost(raw, 0x200);
                 byte[] all = new byte[4 + tail.length];
                 System.arraycopy(magic, 0, all, 0, 4);
                 System.arraycopy(tail, 0, all, 4, tail.length);
-                if (all.length >= 0x104 && asciiAt(all, 0x100, 4).equals("HEAD")) {
+                if (all.length >= 7 && asciiAt(all, 0, 7).equals("UnityFS")) {
+                    out.append("Container: UnityFS asset bundle\\n");
+                } else if (all.length >= 0x104 && asciiAt(all, 0x100, 4).equals("HEAD")) {
                     out.append("Container: XCI cartridge image (HEAD signature found at 0x100)\n");
                     out.append("XCI partition contents were not unpacked or decrypted.\n");
                 } else if (all.length >= 0x204 &&
