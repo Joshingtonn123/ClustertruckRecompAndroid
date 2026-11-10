@@ -1,4 +1,5 @@
 import importlib.util
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,12 +23,14 @@ class ClustertruckProbeTests(unittest.TestCase):
         sample[0x100:0x104] = b"HEAD"
         self.assertEqual(probe.classify_magic(bytes(sample)), "XCI cartridge image header")
 
-
     def test_classifies_elf_magic(self):
         self.assertEqual(probe.classify_magic(b"\x7fELF" + b"\0" * 512), "ELF executable")
 
+    def test_rejects_unrelated_engine_archive_signatures(self):
+        self.assertEqual(probe.classify_magic(b"UnityFS" + b"\0" * 512), "unknown")
+        self.assertEqual(probe.classify_magic(b"UnityWebData" + b"\0" * 512), "unknown")
+
     def test_parses_pfs0_directory_without_extracting_payload(self):
-        import struct
         with tempfile.TemporaryDirectory() as temp:
             package = Path(temp) / "clustertruck.nsp"
             payload = b"NCA3" + b"\0" * 700
@@ -42,48 +45,22 @@ class ClustertruckProbeTests(unittest.TestCase):
         self.assertEqual(report["entries"][0]["size_bytes"], len(payload))
         self.assertEqual(report["entries"][0]["signature"], "NCA content archive (may be encrypted)")
 
-    def test_reads_il2cpp_metadata_header(self):
-        import struct
-        with tempfile.TemporaryDirectory() as temp:
-            metadata = Path(temp) / "global-metadata.dat"
-            metadata.write_bytes(struct.pack("<II", 0xFAB11BAF, 24) + b"\0" * (2 * 1024 * 1024))
-            report = probe.inspect_il2cpp_metadata(metadata)
-        self.assertTrue(report["valid_magic"])
-        self.assertEqual(report["metadata_version"], 24)
-
-    def test_rejects_invalid_il2cpp_metadata_header(self):
-        import struct
-        with tempfile.TemporaryDirectory() as temp:
-            metadata = Path(temp) / "global-metadata.dat"
-            metadata.write_bytes(struct.pack("<II", 0x12345678, 24))
-            report = probe.inspect_il2cpp_metadata(metadata)
-        self.assertFalse(report["valid_magic"])
-        self.assertNotIn("metadata_version", report)
-
-    def test_scan_directory_reads_large_metadata_header_and_unity_version(self):
-        import struct
+    def test_scan_directory_reports_switch_exefs_and_npdm_only(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            metadata = root / "romfs" / "Data" / "Managed" / "Metadata" / "global-metadata.dat"
-            metadata.parent.mkdir(parents=True)
-            metadata.write_bytes(struct.pack("<II", 0xFAB11BAF, 24) + b"\0" * (2 * 1024 * 1024))
-            managers = root / "romfs" / "Data" / "globalgamemanagers"
-            managers.parent.mkdir(parents=True, exist_ok=True)
-            managers.write_bytes(b"2017.4.12f1\0" + b"UnityEngine" + b"\0" * 128)
-            report = probe.scan_directory(root, 100, 8 * 1024 * 1024, 8)
-        self.assertTrue(report["il2cpp_metadata"]["valid_magic"])
-        self.assertEqual(report["il2cpp_metadata"]["metadata_version"], 24)
-        self.assertTrue(any(item["version"] == "2017.4.12f1" for item in report["unity_version_candidates"]))
-
-    def test_unity_path_markers(self):
-        markers = probe.path_markers("romfs/Data/Managed/Metadata/global-metadata.dat")
-        self.assertIn("IL2CPP global metadata", markers)
-
-    def test_unity_text_markers_case_insensitive(self):
-        markers = probe.text_markers(b"UnityPlayer UnityEngine IL2CPP Assembly-CSharp")
-        self.assertIn("UnityPlayer", markers)
-        self.assertIn("il2cpp", markers)
-        self.assertIn("Assembly-CSharp", markers)
+            exefs = root / "exefs"
+            exefs.mkdir()
+            (exefs / "main").write_bytes(b"NSO0" + b"\0" * 512)
+            (exefs / "sdk").write_bytes(b"NSO0" + b"\0" * 512)
+            (exefs / "main.npdm").write_bytes(b"META" + b"\0" * 128)
+            report = probe.scan_directory(root, 100, 8)
+        self.assertEqual(report["extracted_nso_count"], 2)
+        self.assertEqual(report["main_nso"]["path"], "exefs/main")
+        self.assertEqual(report["main_npdm"]["path"], "exefs/main.npdm")
+        self.assertIn("exefs/sdk", report["candidate_paths"])
+        self.assertNotIn("unity_path_evidence", report)
+        self.assertNotIn("unity_backend_assessment", report)
+        self.assertNotIn("il2cpp_metadata", report)
 
     def test_package_file_is_not_extracted(self):
         with tempfile.TemporaryDirectory() as temp:
