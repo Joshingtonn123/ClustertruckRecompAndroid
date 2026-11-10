@@ -654,8 +654,7 @@ public final class MainActivity extends Activity {
         if (moduleCandidate) {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
                 if (input != null) {
-                    byte[] header = readAtMost(input, 0x80);
-                    String info = describeNsoHeader(header, path);
+                    String info = NsoInspector.inspect(input, path, size);
                     if (info != null) {
                         scan.nsoCount++;
                         if (scan.nsoReports.size() < 64) scan.nsoReports.add(info);
