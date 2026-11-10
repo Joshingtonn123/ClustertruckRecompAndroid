@@ -16,7 +16,13 @@
 static bool driver_has_gpu(PFN_vkGetInstanceProcAddr gipa) {
     PFN_vkCreateInstance create = (PFN_vkCreateInstance)gipa(NULL, "vkCreateInstance");
     if (!create) return false;
-    VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO, .apiVersion = VK_API_VERSION_1_3};
+    PFN_vkEnumerateInstanceVersion enumerate_version =
+        (PFN_vkEnumerateInstanceVersion)gipa(NULL, "vkEnumerateInstanceVersion");
+    uint32_t instance_api = VK_API_VERSION_1_0;
+    if (!enumerate_version || enumerate_version(&instance_api) != VK_SUCCESS) return false;
+    instance_api = vk_backend_instance_api_version(instance_api);
+    if (instance_api < VK_API_VERSION_1_1) return false;
+    VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO, .apiVersion = instance_api};
     VkInstanceCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pApplicationInfo = &app};
     VkInstance inst;
     if (create(&ci, NULL, &inst) != VK_SUCCESS) return false;

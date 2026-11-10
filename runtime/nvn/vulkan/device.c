@@ -48,8 +48,17 @@ static void create_instance(void) {
     bool validate = getenv("LARECOMP_VK_VALIDATION") != NULL;
     if (validate) ext[n_ext++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     const char *layers[] = {"VK_LAYER_KHRONOS_validation"};
-    VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO, .pApplicationName = "LARecomp",
-                             .pEngineName = "LARecomp", .apiVersion = VK_API_VERSION_1_3};
+    uint32_t instance_api = VK_API_VERSION_1_3;
+#ifdef __ANDROID__
+    // Android 11 phones can expose Vulkan 1.1. Requesting 1.3 unconditionally makes vkCreateInstance fail
+    // before the device compatibility/extension fallback gets a chance to run.
+    instance_api = VK_API_VERSION_1_0;
+    if (vkEnumerateInstanceVersion(&instance_api) != VK_SUCCESS) instance_api = VK_API_VERSION_1_0;
+    instance_api = vk_backend_instance_api_version(instance_api);
+    if (instance_api < VK_API_VERSION_1_1) FATAL("This phone's Vulkan instance API is below 1.1\\n");
+#endif
+    VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO, .pApplicationName = "Clustertruck Recomp",
+                             .pEngineName = "Clustertruck Recomp", .apiVersion = instance_api};
     VkInstanceCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pApplicationInfo = &app,
                                .enabledExtensionCount = n_ext, .ppEnabledExtensionNames = ext,
                                .enabledLayerCount = validate ? 1 : 0, .ppEnabledLayerNames = layers};

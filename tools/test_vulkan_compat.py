@@ -27,6 +27,10 @@ static int equal(const char *a, const char *b) {
     return *a == *b;
 }
 int check(void) {
+    if (vk_backend_instance_api_version(VK_API_VERSION_1_1) != VK_API_VERSION_1_1) return 22;
+    if (vk_backend_instance_api_version(VK_API_VERSION_1_2) != VK_API_VERSION_1_2) return 23;
+    if (vk_backend_instance_api_version(VK_API_VERSION_1_3) != VK_API_VERSION_1_3) return 24;
+    if (vk_backend_instance_api_version(VK_MAKE_API_VERSION(0, 1, 4, 0)) != VK_API_VERSION_1_3) return 25;
     VkPhysicalDeviceVulkan11Features v11 = {0};
     VkPhysicalDeviceVulkan12Features v12 = {0};
     VkPhysicalDeviceVulkan13Features v13 = {0};
@@ -81,7 +85,7 @@ const fs = require('fs');
 WebAssembly.instantiate(fs.readFileSync(process.argv[2])).then(({instance}) => {
   const code = instance.exports.check();
   if (code) throw new Error(`Vulkan preflight check ${code} failed`);
-  console.log('16 Vulkan compatibility checks passed (production C)');
+  console.log('20 Vulkan compatibility checks passed (production C)');
 }).catch(e => {console.error(e); process.exit(1);});
 ''')
 subprocess.run(['node', str(out / 'run.cjs'), str(out / 'test.wasm')], check=True)

@@ -40,6 +40,11 @@ static inline VkBool32 vk_backend_border_supported(const VkPhysicalDeviceCustomB
     return features->customBorderColors && features->customBorderColorWithoutFormat;
 }
 
+// Ask for no newer instance API than the driver reports, capped at the backend's supported maximum.
+static inline uint32_t vk_backend_instance_api_version(uint32_t supported) {
+    return supported < VK_API_VERSION_1_3 ? supported : VK_API_VERSION_1_3;
+}
+
 static inline const char *vk_missing_backend_feature(const VkPhysicalDeviceVulkan11Features *v11,
                                                      const VkPhysicalDeviceVulkan12Features *v12,
                                                      const VkPhysicalDeviceVulkan13Features *v13) {
