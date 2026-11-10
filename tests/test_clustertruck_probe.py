@@ -59,7 +59,7 @@ class ClustertruckProbeTests(unittest.TestCase):
             result = probe.inspect_single_file(package)
         self.assertEqual(result["input_kind"], "PFS0 package container (commonly NSP)")
         self.assertFalse(result["package_unpacking_performed"])
-        self.assertIn("does not decrypt or extract", result["message"])
+        self.assertIn("not extracted or decrypted", result["message"])
 
 
 if __name__ == "__main__":
