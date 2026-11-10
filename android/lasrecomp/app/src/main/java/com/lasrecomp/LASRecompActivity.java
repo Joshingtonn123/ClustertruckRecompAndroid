@@ -34,6 +34,9 @@ import android.os.PowerManager;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.Log;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.LinearLayout;
 
 import org.libsdl.app.SDLActivity;
 
@@ -259,20 +262,40 @@ public class LASRecompActivity extends SDLActivity {
     public static void chooseGameSource(boolean useInPlace) {
         LASRecompActivity a = self;
         if (a == null) return;
-        a.runOnUiThread(() -> new AlertDialog.Builder(a)
-            .setTitle("Choose game source")
-            .setItems(new String[] {
-                "Import XCI package",
-                "Import NSP package",
-                "Select extracted folder"
-            }, (dialog, which) -> {
-                if (which == 0) a.showNxDumpInstructions("XCI");
-                else if (which == 1) a.showNxDumpInstructions("NSP");
-                else if (useInPlace) a.pickGameFolderInPlace();
+        a.runOnUiThread(() -> {
+            int pad = (int) (12 * a.getResources().getDisplayMetrics().density + 0.5f);
+            LinearLayout content = new LinearLayout(a);
+            content.setOrientation(LinearLayout.VERTICAL);
+            content.setPadding(pad, pad / 2, pad, pad / 2);
+            AlertDialog dialog = new AlertDialog.Builder(a)
+                .setTitle("Choose game source")
+                .setView(content)
+                .setNegativeButton("Cancel", null)
+                .create();
+
+            a.addGameSourceButton(content, dialog, "Import XCI package", () -> a.showNxDumpInstructions("XCI"));
+            a.addGameSourceButton(content, dialog, "Import NSP package", () -> a.showNxDumpInstructions("NSP"));
+            a.addGameSourceButton(content, dialog, "Select extracted folder", () -> {
+                if (useInPlace) a.pickGameFolderInPlace();
                 else a.pickGameFolder();
-            })
-            .setNegativeButton("Cancel", null)
-            .show());
+            });
+            dialog.show();
+        });
+    }
+
+    private void addGameSourceButton(LinearLayout parent, AlertDialog dialog, String label, Runnable action) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setAllCaps(false);
+        button.setOnClickListener(v -> {
+            dialog.dismiss();
+            action.run();
+        });
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.topMargin = (int) (4 * getResources().getDisplayMetrics().density + 0.5f);
+        params.bottomMargin = params.topMargin;
+        parent.addView(button, params);
     }
 
     private void showNxDumpInstructions(String format) {
