@@ -30,3 +30,27 @@ jobs:
         run: python -m py_compile tools/clustertruck_probe.py tools/nso.py
       - name: Run diagnostic unit tests
         run: python -m unittest discover -s tests -v
+
+  android-dump-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android 36 platform
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Build the Android 11-compatible dump probe
+        run: ./android/probe/gradlew -p android/clustertruck-probe --no-daemon :app:assembleDebug
+      - name: Upload dump probe APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: clustertruck-dump-probe-debug
+          path: android/clustertruck-probe/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
