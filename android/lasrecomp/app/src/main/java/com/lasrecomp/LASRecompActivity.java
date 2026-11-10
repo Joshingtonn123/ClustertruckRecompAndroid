@@ -821,6 +821,12 @@ public class LASRecompActivity extends SDLActivity {
             File dataRoot = getExternalFilesDir(null);
             if (dataRoot == null) throw new IOException("App storage is unavailable. Check the phone storage and retry.");
             File games = new File(dataRoot, "extracted");
+            if (compileOnly && "com.android.externalstorage.documents".equals(tree.getAuthority()) &&
+                    exefs.id.startsWith("primary:")) {
+                File local = new File(android.os.Environment.getExternalStorageDirectory(), exefs.id.substring(8));
+                if (ImportStorage.isInside(local, games))
+                    throw new IOException("Choose the original extracted ExeFS folder, not the app's own imported files.");
+            }
             if (compileOnly) {
                 long exefsBytes = treeBytes(tree, exefs);
                 total = exefsBytes;
