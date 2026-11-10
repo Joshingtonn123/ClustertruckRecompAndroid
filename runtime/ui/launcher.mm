@@ -2388,7 +2388,7 @@ extern "C" void launcher_run(const char *root) {
 #endif
                     if (busy) opt_disable_next();
 #ifdef __ANDROID__
-                    if (opt_action("Game files source", tr(src_v.c_str()), src_d.c_str(), true))
+                    if (opt_action("Select the game", tr(src_v.c_str()), src_d.c_str(), true))
                         android_call_bool("chooseGameSource", g_settings.files_in_place);
 #else
                     if (opt_action("Game files folder", src_v.c_str(), src_d.c_str(), true))
