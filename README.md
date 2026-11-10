@@ -17,6 +17,7 @@ The `clustertruck-dev` branch now contains:
 - An Android ExeFS-only import path which accepts an already-extracted folder containing Switch `main` and `sdk`, then runs generic code generation without requiring Zelda's RomFS files. It reports compilation separately and deliberately does not attempt to boot the result.
 - A Switch-only read-only probe for visible XCI/NSP directory metadata, NSO module headers/build IDs, and `main.npdm`.
 - Generic runtime diagnostics report unimplemented imports and warn when `subsdk*` modules are present, since this loader currently loads only `main` and `sdk`.
+- The Android dump probe can inspect bounded NSO dynamic metadata (needed libraries, imported symbols, exports, relocation types) and checks for the exact `nn::init::Start` startup export expected by the current boot routine.
 - CI tests, a diagnostic app build, and a full Android app build job that validates the code-generation importer and native runtime build.
 
 The generic generator is tested with a synthetic NSO containing a function that returns. This proves the generic generator path can emit C for an unknown build ID; it does not prove the real Clustertruck executable is supported. The actual Switch `main` and `sdk` modules still need to be analyzed. The generic profile removes one known boot-time rejection only; the loader, startup symbol, Unity-facing service imports, NVN behavior and any extra ExeFS modules remain unverified.

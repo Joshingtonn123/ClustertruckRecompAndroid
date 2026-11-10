@@ -147,6 +147,7 @@ final class NsoInspector {
         }
 
         int imports = 0, exports = 0;
+        boolean startupExportFound = false;
         LinkedHashSet<String> importNames = new LinkedHashSet<>();
         if (hash >= 0 && symtab >= 0) {
             requireRange(image.length, hash, 8, "ELF hash table");
@@ -165,6 +166,7 @@ final class NsoInspector {
                     if (importNames.size() < MAX_IMPORT_NAMES) importNames.add(name);
                 } else {
                     exports++;
+                    if ("_ZN2nn4init5StartEmmPFvvES2_".equals(name)) startupExportFound = true;
                 }
             }
         }
@@ -195,7 +197,8 @@ final class NsoInspector {
 
         StringBuilder out = new StringBuilder("    Dynamic metadata: ")
                 .append(imports).append(" imports, ").append(exports).append(" exports, ")
-                .append(relocationCount).append(" relocations");
+                .append(relocationCount).append(" relocations; nn::init::Start export: ")
+                .append(startupExportFound ? "PRESENT" : "not found in this module");
         if (!libraries.isEmpty()) {
             out.append("\n    Needed libraries: ");
             appendJoined(out, libraries);

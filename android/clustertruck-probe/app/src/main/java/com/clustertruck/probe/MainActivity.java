@@ -179,7 +179,7 @@ public final class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        reportView = makeText("NO REPORT YET\n\nChoose OPEN FILE to inspect your .NSP or .XCI package. Or open SETTINGS to scan an already-extracted Switch folder for NSO module headers and main.npdm metadata.\n\nThis is a read-only diagnostic build; the Clustertruck game runtime is not integrated yet.", 11, Color.rgb(185, 196, 210), false);
+        reportView = makeText("NO REPORT YET\n\nChoose OPEN FILE to inspect your .NSP or .XCI package. Or open SETTINGS to scan an already-extracted Switch folder for NSO module metadata, imports, exports, relocations and main.npdm.\n\nThis is a read-only diagnostic build; the Clustertruck game runtime is not integrated yet.", 11, Color.rgb(185, 196, 210), false);
         reportView.setTypeface(Typeface.MONOSPACE);
         reportView.setTextIsSelectable(true);
         reportView.setPadding(dp(12), dp(12), dp(12), dp(12));
