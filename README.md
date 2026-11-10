@@ -16,16 +16,17 @@ The `clustertruck-dev` branch contains a separate Android 11+ diagnostic app:
 - [Read-only Python diagnostic](tools/clustertruck_probe.py)
 - [GitHub Actions checks and Android probe build](.github/workflows/clustertruck-probe.yml)
 
-The latest successful workflow produces an artifact named **`clustertruck-dump-probe-debug`**. Download it from the [Actions run](https://github.com/Joshingtonn123/ClustertruckRecompAndroid/actions/runs/42807069464). The ZIP contains `app-debug.apk`; install that APK on Android 11 or later.
+The latest successful workflow produces an artifact named **`clustertruck-dump-probe-debug`**. Open the [Clustertruck workflow runs](https://github.com/Joshingtonn123/ClustertruckRecompAndroid/actions/workflows/clustertruck-probe.yml?query=branch%3Aclustertruck-dev), select the newest successful run, and download the artifact from its Artifacts section. The ZIP contains `app-debug.apk`; it is a diagnostic app for Android 11 or later, **not a playable game build**. GitHub retains each artifact for 7 days.
 
 ### What the diagnostic app does
 
 1. **Inspect .NSP** — reads the outer PFS0 directory and lists visible filenames and sizes. It does not open, decrypt or extract the NCA payloads.
 2. **Inspect .XCI** — checks the cartridge image header only. It does not unpack its partitions.
 3. **Inspect an already-extracted folder** — looks for NSO executable headers/build IDs, segment metadata, `main.npdm`, and Unity/IL2CPP/Mono-related filenames and strings.
-4. **Share report** — copies or shares the text report so the Switch executable can be assessed without uploading the game dump.
+4. **Scan an already-extracted folder** — choose Settings → Scan an already-extracted game folder. The app recursively checks a bounded number of filenames and small file samples, reports visible NSO build IDs and Unity/IL2CPP/Mono clues, and computes a hash for `main.npdm` when present. It does not decrypt, unpack, patch, or modify files.
+5. **Share report** — copies or shares the text report so the Switch executable can be assessed without uploading the game dump.
 
-The tool is read-only. It does not contain game files or keys, decrypt packages, modify the dump, or run the game. An NSP/XCI filename listing by itself is not enough to prove the executable is compatible; an already-extracted folder provides more useful evidence.
+The tool is read-only. It does not contain game files or keys, decrypt packages, modify the dump, or run the game. An NSP/XCI filename listing by itself is not enough to prove the executable is compatible; an already-extracted folder provides more useful evidence. The folder scanner only inspects content that is already present in the folder you select; it does not create that folder or perform package extraction.
 
 ## What still needs to be established
 
