@@ -13,6 +13,18 @@ public final class NsoInspectorTest {
     private static final String START = "_ZN2nn4init5StartEmmPFvvES2_";
 
     @Test
+    public void ignoresLargeUnusedFileTailWhenRequiredSegmentsFitSafetyLimit() throws Exception {
+        byte[] raw = makeNso();
+        // Simulate a provider reporting a large padded/extraction file. The NSO header's actual
+        // segment data still fits in the bounded prefix and can be parsed without reading the tail.
+        String report = NsoInspector.inspect(
+                new ByteArrayInputStream(raw), "exefs/main", (64L * 1024 * 1024) + 1);
+        assertNotNull(report);
+        assertTrue(report, report.contains("1 imports, 1 exports, 1 relocations"));
+        assertTrue(report, report.contains("nn::init::Start export: PRESENT"));
+    }
+
+    @Test
     public void parsesCompressedNsoImportsStartupExportAndRelocations() throws Exception {
         byte[] raw = makeNso();
         String report = NsoInspector.inspect(new ByteArrayInputStream(raw), "exefs/main", raw.length);
