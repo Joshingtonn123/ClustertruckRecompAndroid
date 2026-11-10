@@ -26,10 +26,6 @@ class ClustertruckProbeTests(unittest.TestCase):
     def test_classifies_elf_magic(self):
         self.assertEqual(probe.classify_magic(b"\x7fELF" + b"\0" * 512), "ELF executable")
 
-    def test_rejects_unrelated_engine_archive_signatures(self):
-        self.assertEqual(probe.classify_magic(b"UnityFS" + b"\0" * 512), "unknown")
-        self.assertEqual(probe.classify_magic(b"UnityWebData" + b"\0" * 512), "unknown")
-
     def test_parses_pfs0_directory_without_extracting_payload(self):
         with tempfile.TemporaryDirectory() as temp:
             package = Path(temp) / "clustertruck.nsp"
@@ -58,9 +54,6 @@ class ClustertruckProbeTests(unittest.TestCase):
         self.assertEqual(report["main_nso"]["path"], "exefs/main")
         self.assertEqual(report["main_npdm"]["path"], "exefs/main.npdm")
         self.assertIn("exefs/sdk", report["candidate_paths"])
-        self.assertNotIn("unity_path_evidence", report)
-        self.assertNotIn("unity_backend_assessment", report)
-        self.assertNotIn("il2cpp_metadata", report)
 
     def test_package_file_is_not_extracted(self):
         with tempfile.TemporaryDirectory() as temp:

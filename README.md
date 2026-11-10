@@ -1,50 +1,55 @@
 # Clustertruck Switch → Android (experimental)
 
-**Status: research and diagnostics only — no playable Clustertruck APK exists yet.**
+**Status: generic NSO code generation is integrated in the development branch; target compatibility and game boot are not yet verified. No playable Clustertruck APK exists yet.**
 
-This branch explores whether Clustertruck's Nintendo Switch build can be statically recompiled into a native ARM64 Android app using Vulkan. The intended game input is the user's own Clustertruck dump. This project must not require Link's Awakening files.
+This branch explores a genuine Nintendo Switch 1 → Android recompilation of Clustertruck. The goal is to recompile the Switch executable into native ARM64 code and eventually run it on Android. The current work is focused on proving the executable pipeline, not graphics performance.
 
 > [!WARNING]
-> This repository began as a fork of [LASRecompAndroid](https://github.com/mamcjr/LASRecompAndroid), which is specifically for *The Legend of Zelda: Link's Awakening*. The existing game runtime, game-version tables, patches and original launcher are still Zelda-specific. Renaming the app or changing its file picker would not make it a Clustertruck port. Do not use the existing LAS game launcher to import Clustertruck files.
+> This repository began as a fork of [LASRecompAndroid](https://github.com/mamcjr/LASRecompAndroid), which is specifically for *The Legend of Zelda: Link's Awakening*. The reusable AArch64 generator and some Android build infrastructure are being adapted, but the existing game runtime, game-version tables, patches, HLE, filesystem and original launcher are still title-specific. Merely accepting Clustertruck files does not make the base runtime compatible.
 
-## Current useful output
+## Current engineering output
 
-The `clustertruck-dev` branch contains a separate Android 11+ diagnostic app:
+The `clustertruck-dev` branch now contains:
 
-- [Android probe source](android/clustertruck-probe)
-- [Port assessment and next steps](docs/CLUSTERTRUCK-PORT-PLAN.md)
-- [Read-only Python diagnostic](tools/clustertruck_probe.py)
-- [GitHub Actions checks and Android probe build](.github/workflows/clustertruck-probe.yml)
+- A generic NSO-to-C generator mode which bypasses Zelda-only build-ID and instruction-patch assumptions for the main module.
+- Android game-code builder integration that invokes generic mode for the main NSO and avoids Zelda-specific hot-function hints for an unknown title.
+- An Android ExeFS-only import path which accepts an already-extracted folder containing Switch `main` and `sdk`, then runs generic code generation without requiring Zelda's RomFS files. It reports compilation separately and deliberately does not attempt to boot the result.
+- A Switch-only read-only probe for visible XCI/NSP directory metadata, NSO module headers/build IDs, and `main.npdm`.
+- CI tests, a diagnostic app build, and a full Android app build job that validates the code-generation importer and native runtime build.
 
-The latest successful workflow produces an artifact named **`clustertruck-dump-probe-debug`**. Open the [Clustertruck workflow runs](https://github.com/Joshingtonn123/ClustertruckRecompAndroid/actions/workflows/clustertruck-probe.yml?query=branch%3Aclustertruck-dev), select the newest successful run, and download the artifact from its Artifacts section. The ZIP contains `app-debug.apk`; it is a diagnostic app for Android 11 or later, **not a playable game build**. GitHub retains each artifact for 7 days.
+The generic generator is tested with a synthetic NSO containing a function that returns. This proves the generic generator path can emit C for an unknown build ID; it does not prove the real Clustertruck executable is supported. The actual Switch `main` and `sdk` modules still need to be analyzed.
 
-### What the diagnostic app does
+## Diagnostic app
 
-1. **Inspect .NSP** — reads the outer PFS0 directory and lists visible filenames and sizes. It does not open, decrypt or extract the NCA payloads.
-2. **Inspect .XCI** — reads the cartridge header and visible HFS0 directory metadata for its partitions, listing names, sizes and file signatures. It does not decrypt or extract NCA payloads.
-3. **Inspect a standalone NSO** — reports its visible build ID, flags, BSS size, and text/rodata/data segment offsets and sizes from the header.
-4. **Scan an already-extracted folder** — choose Settings → Scan an already-extracted game folder. The app recursively checks a bounded number of filenames and small file samples, reports visible NSO build IDs, reads the 8-byte `global-metadata.dat` header to identify a genuine IL2CPP metadata version, looks for Unity version strings in selected Unity file headers, and computes a hash for `main.npdm` when present. It does not decrypt, unpack, patch, or modify files.
-5. **Share report** — copies or shares the text report so the Switch executable can be assessed without uploading the game dump.
+A separate Android 11+ probe app is at [`android/clustertruck-probe/`](android/clustertruck-probe/). It is not the recompilation app and cannot run Clustertruck.
 
-The tool is read-only. It does not contain game files or keys, decrypt packages, modify the dump, or run the game. An NSP/XCI filename listing by itself is not enough to prove the executable is compatible; an already-extracted folder provides more useful evidence. The folder scanner only inspects content that is already present in the folder you select; it does not create that folder or perform package extraction.
+1. **Inspect NSP** — reads the outer PFS0 directory and lists visible filenames and sizes. It does not inspect, decrypt or extract NCA payloads.
+2. **Inspect XCI** — reads the cartridge header and visible HFS0 directory metadata for its partitions, listing filenames, sizes and visible file signatures. It does not decrypt or extract NCA payloads.
+3. **Inspect standalone NSO** — reports its visible build ID, flags, BSS size, and text/rodata/data segment sizes and offsets.
+4. **Scan an already-extracted Switch folder** — looks for the `main`, `sdk`, `rtld`, `subsdk*` NSO module headers and hashes `main.npdm`. It reads only those headers and the NPDM file for hashing; it does not inspect engine data, unpack or modify files.
+5. **Share report** — copies or shares the text report so module metadata can be assessed without uploading game files.
 
-## Generic NSO generation smoke test
-The Android on-device game-code builder and `android/build_gamelib.sh` now invoke this mode for the main NSO; the SDK module remains on the normal HLE-symbol path. Zelda hot-function hints are disabled when the main build ID is not in the Zelda version table. The current launcher and runtime still contain Zelda-specific import and boot requirements, so this is not yet a complete Clustertruck launch path.
+The probe does not contain game files or keys, decrypt packages, modify the dump, or run the game. An NSP/XCI filename listing alone cannot prove that the executable is supported. A report from an already-extracted Switch ExeFS folder is the next useful input.
 
+## Generic NSO code generation
 
-`tools/gen.py` now includes a `--generic` mode that skips the Link's Awakening build-ID gate and all Zelda-specific instruction patches. A synthetic NSO CI test verifies that this mode emits Android dynamic-base C code for an arbitrary build ID. This is a recompiler-tooling test only; it does not make the current Zelda runtime Clustertruck-compatible and does not produce a playable APK.
+`tools/gen.py --generic` accepts an arbitrary main-module build ID and disables the Zelda-specific address/patch and randomizer substitutions. The Android on-device builder passes this option for the main NSO; its SDK module continues through the existing HLE-symbol generator path. When the main build ID is not in the Zelda version table, the Android builder also disables Zelda-derived hot-function address hints.
 
-## What still needs to be established
+The ExeFS-only Android path copies a selected extracted `main` + `sdk` folder and invokes this generic builder. A successful result means native C/ARM64 game code was generated; **it does not mean the game can boot**. The base runtime still has title-specific startup, service/HLE, memory, filesystem, save and graphics assumptions.
 
-Before implementing the game runtime, the actual Switch build must be inspected to determine its executable format, Unity version, scripting backend, imports/system services, graphics interface, and compatibility with the available AArch64 recompilation pipeline.
+## What remains before Clustertruck can boot
 
-A separate public reference, [Cruis'n Blast Recomp](https://github.com/darkuni/cruisn-blast-recomp), documents a Unity IL2CPP + NVN Switch game and a desktop static-recompilation pipeline. It is a useful technical comparison, not a ready-made Android port. Clustertruck's Switch build still needs its own evidence and title-specific work.
+We still need non-sensitive metadata from the actual Switch build:
 
-## Development branch
+- Confirm the actual `main` and `sdk` formats, build IDs, segment sizes, imports and relocation types.
+- Run the real NSOs through the generator and fix unsupported instructions/relocations without applying unrelated title patches.
+- Identify the imported system services and the game entry/startup path.
+- Identify the actual graphics interface, then determine what renderer work or reuse is appropriate.
+- Replace the title-specific boot/runtime, memory, filesystem, audio/input and save assumptions.
+- Only after the native app builds and the game runtime is adapted can we test an actual boot on Android.
 
-Work is being done on `clustertruck-dev`. The upstream-derived `main` branch is left untouched until a real Clustertruck implementation is ready.
+## Branch policy
 
+All Clustertruck experiments stay on `clustertruck-dev`. The upstream-derived `main` branch is intentionally untouched.
 
-### Android ExeFS-only recompilation
-
-The Android folder importer accepts an extracted ExeFS tree with `main` and `sdk` even when no Link's Awakening RomFS folder is present. It runs the generic on-device NSO-to-C recompilation and reports success separately; it does not launch the generated code. Clustertruck's runtime, startup services and renderer still need separate integration before the game can boot.
+The diagnostic and full-application build artifacts are temporary GitHub Actions artifacts. Open the [Clustertruck workflow runs](https://github.com/Joshingtonn123/ClustertruckRecompAndroid/actions/workflows/clustertruck-probe.yml?query=branch%3Aclustertruck-dev) to access recent builds. A full-app development APK, once CI succeeds, is for testing the ExeFS-only code-generation path; it is **not** a playable Clustertruck release.

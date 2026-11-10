@@ -9,7 +9,7 @@ This document records the feasibility work for this fork. It is a work plan and 
 - The Android import flow expects an extracted game directory containing `exefs/` and `romfs/`. `android/build_gamelib.sh` takes an `exefs` directory and generates game code from the Switch `main` and `sdk` NSO modules.
 - `tools/gen.py` lifts AArch64 NSO modules, but `runtime/game_addresses/versions.h` recognizes only Link's Awakening build IDs. The generator/runtime also consume title-specific patch/address tables and HLE symbol definitions.
 - The Android launcher explicitly treats `.nsp`, `.xci`, `.nca`, `.nsz` and `.xcz` as package files it cannot use. It does not unpack those containers.
-- There is no project-owned Android GitHub Actions workflow at the repository root. Existing workflow files in the tree belong to vendored dependencies.
+- A project-owned workflow at `.github/workflows/clustertruck-probe.yml` runs Switch-probe tests, the generic NSO recompiler smoke test, the diagnostic APK build, and an opt-in full Android app build.
 
 ## Goal
 
@@ -31,7 +31,7 @@ For extracted content it reports:
 - candidate ExeFS/RomFS paths and common Switch module names;
 - package files that remain in the folder and likely extraction-layout candidates.
 
-It is diagnostic only. It does not decrypt or unpack Switch packages, modify files, infer a supported game version, or claim a Unity backend from weak string evidence.
+It is diagnostic only. It does not decrypt or unpack Switch packages, modify files, infer a supported game version, or infer an engine/backend from filenames.
 
 Run it with Python and the pinned dependency:
 
@@ -71,7 +71,7 @@ The latest CI runs are linked from the repository's Actions tab. Diagnostic and 
 ### Stage 2 — Confirm the executable pipeline
 - Determine whether Clustertruck's Switch executable is an NSO/AArch64 module compatible with the existing parser and lifter.
 - Identify imports, system services, unsupported instructions, relocations and graphics calls.
-- Establish the Unity version and scripting backend from Switch-build evidence, not from the separate WebGL scan.
+- Identify the actual game runtime and graphics interface only from the Switch executable and its extracted data; do not infer them from another build target.
 - Do not add a Clustertruck build-ID table or title patches until they are grounded in the actual Clustertruck executable.
 
 ### Stage 3 — Clustertruck-specific runtime
@@ -102,7 +102,7 @@ The Android on-device builder in `runtime/gamebuild.c` now passes `--generic` fo
 
 **What this proves:** the repository's NSO reader/lifter can run through code generation for a synthetic unknown-build-ID NSO without Zelda-specific instruction patches.
 
-**What it does not prove:** that Clustertruck's actual Switch main/sdk are NSOs accepted by this parser, that the real instruction set is fully supported, or that the Zelda Android runtime can boot Unity. The runtime still enforces Link's Awakening's game-version profile, and its loader, HLE, filesystem, and renderer assumptions remain title-specific. Do not build or install a game APK based on this generator test.
+**What it does not prove:** that Clustertruck's actual Switch main/sdk are NSOs accepted by this parser, that the real instruction set is fully supported, or that the Zelda-derived Android runtime can boot Clustertruck. The runtime still enforces Link's Awakening's game-version profile, and its loader, HLE, filesystem, and renderer assumptions remain title-specific. Do not build or install a game APK based on this generator test.
 
 
 **Diagnostic tooling and the earlier Android 11+ probe APK are built and CI-tested. A newer XCI HFS0 directory-inspection change is committed but still needs a fresh Android CI build and a test against the user's XCI. Clustertruck game compatibility is not yet established.** No Clustertruck Switch executable has yet been analyzed by this repository, no Clustertruck game-code library has been generated, and no playable Clustertruck APK has been built or tested. The next decision depends on a report from the actual Switch build.
@@ -115,14 +115,14 @@ The upstream-derived `main` branch is still the LASRecompAndroid base; it has no
 ### Candidate components to preserve or adapt
 
 - **Android platform shell:** Android activity/lifecycle, SDL3 window/input/audio integration, Gradle/NDK setup, touch controls, controller support, settings and file-picker patterns.
-- **Graphics foundation:** Vulkan device/swapchain management, NVN command translation, shader translation, render-thread scheduling, render-target management and compatibility fallbacks for Vulkan 1.1/1.2 drivers. These are candidates only if Clustertruck's Switch renderer is NVN-compatible.
+- **Graphics foundation:** Vulkan device/swapchain management, shader translation, render-thread scheduling, render-target management and compatibility fallbacks for mobile Vulkan drivers. Reuse depends on the graphics interface actually used by Clustertruck's Switch build.
 - **ARM64 recompilation infrastructure:** NSO/AArch64 parsing and lifting, native code generation, memory/runtime support and HLE scaffolding. These can be evaluated only after the actual Clustertruck executable and imports are identified.
 - **BOTW-derived Android improvements already documented upstream:** native ARM64 game-code mode, GPU arena/copy tracking for drivers without direct GPU heap mapping, classic render-pass fallback, and other Mali/stock-driver paths. We should reuse these existing implementations where their assumptions match Clustertruck, rather than reimplementing them.
 - **Build and diagnostics:** Android build configuration, dependency build scripts, CI patterns, logging and performance instrumentation.
 
 ### What cannot be carried over unchanged
 
-The current game-version/build-ID recognition, Zelda address and patch tables, Zelda-specific HLE assumptions, save/data formats, game setup validation, launcher text and game-specific runtime behavior must not be treated as Clustertruck support. A Unity title may also require a different executable/runtime integration path from Link's Awakening. The WebGL scan is not enough to decide whether the Switch build is Mono or IL2CPP.
+The current game-version/build-ID recognition, Zelda address and patch tables, Zelda-specific HLE assumptions, save/data formats, game setup validation, launcher text and game-specific runtime behavior must not be treated as Clustertruck support. The game may require a different executable/runtime integration path from Link's Awakening. Its requirements must be derived from Switch-specific evidence.
 
 ### Reuse decision for Clustertruck
 
@@ -141,4 +141,4 @@ The user's Helio G90T uses a Mali-G76 MC4, not the Mali-G52 MC2 commonly paired 
 
 The Android folder importer now has an ExeFS-only path: when a selected extracted folder contains `main` and `sdk` but no LAS RomFS marker / RomFS image, it copies the ExeFS tree and invokes the on-device generic game-code builder. This path skips the Link's Awakening build-ID gate and doesn't require Zelda's `region_common` data. It reports code-generation completion separately and does not attempt to boot the result. For lower-memory phones, this forced generic build is capped at two concurrent compiler jobs.
 
-This provides a phone-side route to generate Clustertruck's C/ARM64 native game library once its extracted Switch `main` and `sdk` modules are available. The real modules are still required before we can know whether the parser/lifter supports them. The launcher boot flow, startup symbol, service/HLE layer, Unity runtime integration, and NVN/renderer compatibility remain unimplemented/unknown. A completed generic library is not a playable port.
+This provides a phone-side route to generate Clustertruck's C/ARM64 native game library once its extracted Switch `main` and `sdk` modules are available. The real modules are still required before we can know whether the parser/lifter supports them. The launcher boot flow, startup symbol, service/HLE layer, game-runtime integration, and graphics-interface compatibility remain unimplemented/unknown. A completed generic library is not a playable port.

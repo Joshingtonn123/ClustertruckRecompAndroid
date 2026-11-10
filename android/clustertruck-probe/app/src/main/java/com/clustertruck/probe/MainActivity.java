@@ -46,13 +46,6 @@ public final class MainActivity extends Activity {
     private static final int MAX_PFS0_ENTRIES = 8192;
     private static final int MAX_STRING_TABLE = 4 * 1024 * 1024;
     private static final int MAX_FILES = 100_000;
-    private static final long MAX_TEXT_SCAN_BYTES = 128L * 1024L * 1024L;
-    private static final int MAX_TEXT_SAMPLE = 2 * 1024 * 1024;
-    private static final int IL2CPP_METADATA_MAGIC = (int) 0xFAB11BAF;
-    private static final Pattern UNITY_VERSION_PATTERN = Pattern.compile(
-            "(?<![0-9])[0-9]{1,4}\\.[0-9]{1,2}\\.[0-9]{1,3}[abfp][0-9]+(?![0-9])",
-            Pattern.CASE_INSENSITIVE);
-
     private TextView reportView;
     private TextView statusView;
     private Button playButton;
