@@ -120,3 +120,32 @@ The current game-version/build-ID recognition, Zelda address and patch tables, Z
 ### Mali G85 and the user's Mali-G76 MC4
 
 The user's Helio G90T uses a Mali-G76 MC4, not the Mali-G52 MC2 commonly paired with Helio G85. The G76 MC4 is a different and generally stronger GPU configuration, so a demonstrated working path on a G85 would be encouraging evidence, not a guarantee. Vulkan extension support, driver behavior, memory bandwidth, CPU load, game workload and thermal limits still determine whether it boots and how well it runs. The upstream LAS README currently reports 20–30 fps on a Mali-G615 and says that more real Mali devices still need confirmation; that is not a benchmark for this Clustertruck port or a verified G85/G76 result.
+
+
+## Engineering update — 2026-11-10
+
+### Evidence collected so far
+
+- The user's cartridge report identifies title ID `010096900A4D2000`, an XCI container, and a secure HFS0 partition containing eight visible entries. The two largest visible NCA entries are approximately 320 MB and 111 MB. These are container-level facts only: the NCA payloads remain encrypted/unread, so this report contains no executable build ID, Unity version, scripting backend or renderer evidence.
+- Nintendo's product page lists the Switch release date as March 15, 2018 and the download size as 419 MB ([Nintendo product page](https://www.nintendo.com/us/store/products/clustertruck-switch/)). The reported XCI size being in the same general range does **not** prove that the executable or any content is complete.
+- The supplied Unity WebGL scan reports six `ClusterTruckWEB.data.part*` chunks totalling 103,095,895 bytes, Unity WebData, WebAssembly, `Assembly-CSharp` strings and script-source path strings. Those are clues about the WebGL build only. The report's embedded-entry parser also recorded invalid/out-of-range entry offsets, so its raw-string hits must not be treated as a validated Unity asset inventory or as Switch-build metadata.
+- PCGamingWiki records Unity 5.3.4f1 for the PC build, based on a 2018 user verification ([PC build reference](https://www.pcgamingwiki.com/wiki/Clustertruck)). This is a useful historical clue, **not** confirmation of the Switch build's exact Unity version or scripting backend.
+- [Cruis'n Blast Recomp](https://github.com/darkuni/cruisn-blast-recomp) demonstrates a Unity IL2CPP + NVN recompilation architecture, but its documented target is Unity 2019.4.18f1 and its runtime is desktop Windows/Linux. Its Unity metadata assumptions, shader parser, renderer patches and runtime cannot be copied to Clustertruck without version-specific evidence.
+
+### Updated technical direction
+
+The project should not begin by transplanting Cruis'n Blast's code or by trying to make the Zelda launcher accept this XCI. The next engineering gate is identifying the already-extracted Switch executable and Unity data:
+
+1. **Executable format and architecture.** Confirm whether the Switch game's `main` is a normal NSO/AArch64 module, record its build ID and segment sizes, and inspect its imports/relocations. If it is not an NSO compatible with the existing `tools/gen.py` pipeline, that pipeline must be replaced or adapted before generating game code.
+2. **Unity runtime and scripting backend.** Look for Switch-build metadata and runtime files such as `globalgamemanagers`, `boot.config`, `global-metadata.dat`, `Assembly-CSharp`, `libil2cpp`, `mscorlib` or Mono-related libraries. These are indicators, not individually conclusive proof. The WebGL build must not be used as a substitute for the Switch build.
+3. **Graphics interface.** Confirm whether the Switch executable imports/uses NVN. Only then can the existing Android Vulkan/NVN renderer be treated as a viable starting point. If Clustertruck uses a different renderer path, it needs a separate translation/integration plan.
+4. **Runtime services and assets.** Map the actual imports, filesystem/audio/input expectations and Unity asset layout before changing the Zelda HLE services, save system, version tables or data paths.
+5. **Android integration.** Preserve reusable SDL3, Android lifecycle, touch/input, audio and Vulkan platform code where the interfaces match. Remove Zelda-only build IDs, patches, HLE assumptions and launcher/import checks from the eventual Clustertruck runtime. Do not label the diagnostic APK as a game build.
+
+### Phone-side diagnostic path
+
+The Android diagnostic app now exposes its existing read-only extracted-folder scanner through **Settings → Scan an already-extracted game folder**. It reports NSO headers/build IDs, `main.npdm` hash, Unity path markers and bounded string samples. It does not unpack or decrypt the selected XCI/NSP, and it does not modify files. The regular **Open File** action remains the package metadata inspector.
+
+### Current blocker and next deliverable
+
+The XCI/HFS0 report and WebGL scan do not contain enough Switch-specific evidence to safely generate Clustertruck game code. The next useful report is from an already-extracted copy of the Switch build, especially the ExeFS `main`/SDK module headers and visible Unity data filenames/metadata. Once that evidence exists, the project can make a grounded choice between adapting the current NSO lifter, adopting a more Unity-oriented static recompilation pipeline, or taking a different route. Until then, claiming that an APK will boot would be misleading.
