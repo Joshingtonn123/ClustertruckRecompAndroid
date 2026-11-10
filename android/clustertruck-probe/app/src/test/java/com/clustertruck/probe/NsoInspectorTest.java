@@ -39,17 +39,17 @@ public final class NsoInspectorTest {
         int needed = 1;
         int startupName = 1 + "libnn_sdk.so".length() + 1;
         int importName = startupName + START.length() + 1;
-        put32(rodata, 0x40, 1);              // DT_HASH: nbucket
-        put32(rodata, 0x44, 3);              // DT_HASH: nchain (symbol count)
-        putString(rodata, 0x80, strings);
+        put32(rodata, 0x10, 1);              // DT_HASH: nbucket
+        put32(rodata, 0x14, 3);              // DT_HASH: nchain (symbol count)
+        putString(rodata, 0x40, strings);
 
         // Three ELF64 dynamic symbols: null, one undefined import, one defined startup export.
-        put32(rodata, 0xa0 + 24, importName);
-        rodata[0xa0 + 24 + 4] = 0x12;
-        put16(rodata, 0xa0 + 24 + 6, 0);
-        put32(rodata, 0xa0 + 48, startupName);
-        rodata[0xa0 + 48 + 4] = 0x12;
-        put16(rodata, 0xa0 + 48 + 6, 1);
+        put32(rodata, 0x80 + 24, importName);
+        rodata[0x80 + 24 + 4] = 0x12;
+        put16(rodata, 0x80 + 24 + 6, 0);
+        put32(rodata, 0x80 + 48, startupName);
+        rodata[0x80 + 48 + 4] = 0x12;
+        put16(rodata, 0x80 + 48 + 6, 1);
 
         // A single R_AARCH64_JUMP_SLOT relocation (type 1026 / 0x402).
         put64(data, 0x30, 0x50);
@@ -58,9 +58,9 @@ public final class NsoInspectorTest {
 
         long[][] dynamic = {
                 {1, needed},          // DT_NEEDED
-                {4, 0x140},           // DT_HASH
-                {5, 0x180},           // DT_STRTAB
-                {6, 0x1a0},           // DT_SYMTAB
+                {4, 0x110},           // DT_HASH
+                {5, 0x140},           // DT_STRTAB
+                {6, 0x180},           // DT_SYMTAB
                 {7, 0x230},           // DT_RELA
                 {8, 24},              // DT_RELASZ
                 {10, strings.length}, // DT_STRSZ
