@@ -1,11 +1,18 @@
 // NSO loading, relocation, and symbol resolution.
 #include <stdlib.h>
 #include <string.h>
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+#include <dirent.h>
+#include <sys/stat.h>
+#endif
 
 #include "rt.h"
 
 Module g_modules[4];
 int g_nmodules;
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+static unsigned g_missing_import_logs;
+#endif
 
 enum { DT_NULL = 0, DT_PLTRELSZ = 2, DT_HASH = 4, DT_STRTAB = 5, DT_SYMTAB = 6, DT_RELA = 7, DT_RELASZ = 8,
        DT_JMPREL = 23, DT_INIT_ARRAY = 25, DT_FINI_ARRAY = 26, DT_INIT_ARRAYSZ = 27, DT_FINI_ARRAYSZ = 28 };
@@ -144,6 +151,15 @@ static uint64_t resolve(Module *m, uint32_t symidx) {
     uint64_t a = loader_find_symbol(name);
     if (a) return a;
     if ((s->info >> 4) == 2) return 0;  // weak undefined
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    // Unity / SDK imports without a host implementation should be visible in the device log.
+    // The call still receives the normal unimplemented HLE stub; this is diagnostic, not a fake implementation.
+    if (g_missing_import_logs < 64)
+        LOG("[loader] no host implementation for import '%s' from %s; using an unimplemented stub\\n", name, m->name);
+    else if (g_missing_import_logs == 64)
+        LOG("[loader] further unimplemented imports suppressed\\n");
+    g_missing_import_logs++;
+#endif
     return hle_register(name, NULL);
 }
 
@@ -181,6 +197,9 @@ static void relocate(Module *m) {
 
 void loader_load(const char *exefs) {
     char path[1024];
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    g_missing_import_logs = 0;
+#endif
     const struct { const char *name; uint64_t base; } mods[] = {{"main", MAIN_BASE}, {"sdk", SDK_BASE}};  // (not static: Android's bases move)
     for (unsigned i = 0; i < 2; i++) {
         Module *m = &g_modules[g_nmodules++];
@@ -188,5 +207,21 @@ void loader_load(const char *exefs) {
         snprintf(path, sizeof path, "%s/%s", exefs, m->name);
         load_nso(m, path, mods[i].base);
     }
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    // This loader currently links only main + sdk. Report optional Unity / middleware modules instead of silently
+    // implying that they were included in the recompiled game library.
+    DIR *dir = opendir(exefs);
+    if (dir) {
+        struct dirent *entry;
+        while ((entry = readdir(dir))) {
+            if (strncmp(entry->d_name, "subsdk", 6)) continue;
+            snprintf(path, sizeof path, "%s/%s", exefs, entry->d_name);
+            struct stat st;
+            if (stat(path, &st) == 0 && S_ISREG(st.st_mode))
+                LOG("[loader] EXTRA MODULE NOT LOADED: %s (current Clustertruck loader supports main + sdk only)\\n", entry->d_name);
+        }
+        closedir(dir);
+    }
+#endif
     for (int i = 0; i < g_nmodules; i++) relocate(&g_modules[i]);
 }
