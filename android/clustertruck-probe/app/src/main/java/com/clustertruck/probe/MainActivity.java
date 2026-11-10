@@ -35,8 +35,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * A small Android 11+ metadata probe for a user's own Clustertruck Switch dump.
@@ -188,7 +186,7 @@ public final class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        reportView = makeText("NO REPORT YET\n\nChoose OPEN FILE to inspect your .NSP or .XCI package. Or open SETTINGS to scan an already-extracted game folder for NSO build IDs and Unity runtime clues.\n\nThis is a read-only diagnostic build; the Clustertruck game runtime is not integrated yet.", 11, Color.rgb(185, 196, 210), false);
+        reportView = makeText("NO REPORT YET\n\nChoose OPEN FILE to inspect your .NSP or .XCI package. Or open SETTINGS to scan an already-extracted Switch folder for NSO module headers and main.npdm metadata.\n\nThis is a read-only diagnostic build; the Clustertruck game runtime is not integrated yet.", 11, Color.rgb(185, 196, 210), false);
         reportView.setTypeface(Typeface.MONOSPACE);
         reportView.setTextIsSelectable(true);
         reportView.setPadding(dp(12), dp(12), dp(12), dp(12));
@@ -391,9 +389,7 @@ public final class MainActivity extends Activity {
                 byte[] all = new byte[4 + tail.length];
                 System.arraycopy(magic, 0, all, 0, 4);
                 System.arraycopy(tail, 0, all, 4, tail.length);
-                if (all.length >= 7 && asciiAt(all, 0, 7).equals("UnityFS")) {
-                    out.append("Container: UnityFS asset bundle\n");
-                } else if (all.length >= 0x104 && asciiAt(all, 0x100, 4).equals("HEAD")) {
+                if (all.length >= 0x104 && asciiAt(all, 0x100, 4).equals("HEAD")) {
                     out.append("Container: XCI cartridge image (HEAD signature found at 0x100)\n");
                     inspectXciPartitions(uri, size, all, out);
                 } else if (all.length >= 0x204 &&
@@ -587,47 +583,22 @@ public final class MainActivity extends Activity {
         StringBuilder out = new StringBuilder();
         out.append("CLUSTERTRUCK SWITCH DUMP — EXTRACTED FOLDER REPORT\n");
         out.append("Created: ").append(timestamp()).append('\n');
-        out.append("Files seen: ").append(scan.filesSeen).append(scan.truncated ? " (scan limit reached)" : "").append('\n');
+        out.append("Files seen: ").append(scan.filesSeen)
+                .append(scan.truncated ? " (scan limit reached)" : "").append('\n');
         out.append("NSO executables found: ").append(scan.nsoCount).append('\n');
-        out.append("Text bytes scanned: ").append(scan.textBytes).append('\n');
-        out.append("Files skipped by text-scan size/budget limits: ").append(scan.skippedTextFiles).append('\n');
 
         if (scan.nsoReports.isEmpty()) {
             out.append("\nNo NSO0 executable header was found in the scanned files.\n");
         } else {
-            out.append("\nNSO module headers:\n");
+            out.append("\nSwitch executable module headers:\n");
             for (String item : scan.nsoReports) out.append("  ").append(item).append('\n');
         }
-        if (scan.npdmReport != null) out.append("\n").append(scan.npdmReport).append('\n');
-        if (scan.il2cppMetadataReport != null)
-            out.append("\nIL2CPP metadata header:\n  ").append(scan.il2cppMetadataReport).append('\n');
-
-        out.append("\nUnity version-string candidates (from Unity file headers):\n");
-        if (scan.unityVersionCandidates.isEmpty()) out.append("  none found\n");
-        else for (String item : scan.unityVersionCandidates) out.append("  ").append(item).append('\n');
-
-        out.append("\nUnity filename evidence:\n");
-        if (scan.pathEvidence.isEmpty()) out.append("  none found\n");
-        else for (String item : scan.pathEvidence) out.append("  ").append(item).append('\n');
-
-        out.append("\nUnity / runtime strings in sampled files:\n");
-        if (scan.textEvidence.isEmpty()) out.append("  none found\n");
-        else for (String item : scan.textEvidence) out.append("  ").append(item).append('\n');
-
-        boolean il2cpp = scan.hasIl2cpp;
-        boolean mono = scan.hasMono;
-        out.append("\nScripting backend assessment: ");
-        if (il2cpp && mono) out.append("ambiguous; both IL2CPP and Mono-related markers found\n");
-        else if (il2cpp) out.append("IL2CPP-related evidence found; confirm against the Switch executable\n");
-        else if (mono) out.append("Mono/.NET-related evidence found; confirm against the Switch executable\n");
-        else if (!scan.pathEvidence.isEmpty() || !scan.textEvidence.isEmpty())
-            out.append("Unity-related evidence found, but backend is undetermined\n");
-        else out.append("undetermined; no reliable Unity backend marker found\n");
+        if (scan.npdmReport != null) out.append("\nmain.npdm metadata:\n  ").append(scan.npdmReport).append('\n');
 
         out.append("\nNotes:\n");
-        out.append("- NSO build IDs and Unity markers are diagnostic evidence, not proof of compatibility with LASRecomp.\n");
-        out.append("- The earlier Unity WebGL scan describes a different build target; this report inspects the selected Switch files.\n");
-        out.append("- No game file was modified, unpacked, patched or decrypted by this scan.\n");
+        out.append("- The scan only reads Switch module headers and hashes main.npdm; it does not unpack or modify game files.\n");
+        out.append("- NSO headers and build IDs identify executable inputs but do not prove the generic lifter supports every instruction.\n");
+        out.append("- No executable payload was uploaded or included in this report.\n");
         return out.toString();
     }
 
@@ -635,16 +606,8 @@ public final class MainActivity extends Activity {
         int filesSeen;
         int nsoCount;
         boolean truncated;
-        long textBytes;
-        int skippedTextFiles;
-        boolean hasIl2cpp;
-        boolean hasMono;
         String npdmReport;
-        String il2cppMetadataReport;
-        final List<String> unityVersionCandidates = new ArrayList<>();
         final List<String> nsoReports = new ArrayList<>();
-        final List<String> pathEvidence = new ArrayList<>();
-        final List<String> textEvidence = new ArrayList<>();
     }
 
     private void scanChildren(Uri treeUri, String parentId, String prefix, int depth, FolderScan scan) throws IOException {
@@ -691,35 +654,11 @@ public final class MainActivity extends Activity {
     }
 
     private void inspectFolderFile(Uri uri, String path, long size, FolderScan scan) {
-        String lower = path.toLowerCase(Locale.ROOT);
-        if (lower.contains("globalgamemanagers")) addPathEvidence(scan, path, "Unity global game manager");
-        if (lower.contains("boot.config")) addPathEvidence(scan, path, "Unity boot configuration");
-        if (lower.contains("resources.assets")) addPathEvidence(scan, path, "Unity resources asset");
-        if (lower.contains("sharedassets")) addPathEvidence(scan, path, "Unity shared assets");
-        if (lower.contains("global-metadata.dat") || lower.contains("il2cpp_data") || lower.contains("libil2cpp") ||
-                lower.contains("gameassembly")) {
-            addPathEvidence(scan, path, "IL2CPP-related path marker");
-            scan.hasIl2cpp = true;
-        }
-        if (lower.contains("assembly-csharp") || lower.contains("mscorlib") || lower.contains("mono-2.0")) {
-            addPathEvidence(scan, path, "Mono/.NET-related path marker");
-            scan.hasMono = true;
-        }
-        if (lower.contains("unityplayer") || lower.contains("unityfs") || lower.contains("data.unity3d")) {
-            addPathEvidence(scan, path, "Unity runtime/archive path marker");
-        }
+        String basename = path.substring(path.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+        boolean moduleCandidate = "main".equals(basename) || "sdk".equals(basename) ||
+                "rtld".equals(basename) || basename.startsWith("subsdk") || basename.endsWith(".nso");
 
-        String basename = lower.substring(lower.lastIndexOf('/') + 1);
-        if ("global-metadata.dat".equals(basename) && scan.il2cppMetadataReport == null) {
-            try (InputStream input = getContentResolver().openInputStream(uri)) {
-                if (input == null) throw new IOException("file could not be opened");
-                scan.il2cppMetadataReport = describeIl2CppMetadataHeader(readAtMost(input, 8), path);
-            } catch (Exception error) {
-                scan.il2cppMetadataReport = path + " — metadata header read failed: " + error.getMessage();
-            }
-        }
-
-        if ("main".equals(basename) || basename.endsWith(".nso") || basename.startsWith("subsdk")) {
+        if (moduleCandidate) {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
                 if (input != null) {
                     byte[] header = readAtMost(input, 0x80);
@@ -727,12 +666,14 @@ public final class MainActivity extends Activity {
                     if (info != null) {
                         scan.nsoCount++;
                         if (scan.nsoReports.size() < 64) scan.nsoReports.add(info);
-                    } else if ("main".equals(basename) && scan.nsoReports.size() < 64) {
-                        scan.nsoReports.add(path + " — file named main, but no NSO0 header");
+                    } else if ("main".equals(basename) || "sdk".equals(basename)) {
+                        if (scan.nsoReports.size() < 64)
+                            scan.nsoReports.add(path + " — expected Switch NSO0 header was not found");
                     }
                 }
             } catch (Exception error) {
-                if (scan.nsoReports.size() < 64) scan.nsoReports.add(path + " — read error: " + error.getMessage());
+                if (scan.nsoReports.size() < 64)
+                    scan.nsoReports.add(path + " — read error: " + error.getMessage());
             }
         }
 
@@ -743,70 +684,6 @@ public final class MainActivity extends Activity {
                 scan.npdmReport = path + " — SHA-256 unavailable: " + error.getMessage();
             }
         }
-
-        boolean textCandidate = basename.endsWith(".assets") || basename.endsWith(".resource") ||
-                basename.endsWith(".bundle") || basename.endsWith(".dat") || basename.endsWith(".dll") ||
-                basename.endsWith(".config") || basename.equals("main") || basename.equals("boot.config") ||
-                basename.equals("globalgamemanagers");
-        if (textCandidate && size >= 0 && size <= MAX_TEXT_SAMPLE &&
-                scan.textBytes + size <= MAX_TEXT_SCAN_BYTES) {
-            try (InputStream input = getContentResolver().openInputStream(uri)) {
-                if (input != null) {
-                    byte[] sample = readAtMost(input, (int) Math.min(size, MAX_TEXT_SAMPLE));
-                    scan.textBytes += sample.length;
-                    collectTextMarkers(scan, path, sample);
-                }
-            } catch (Exception ignored) {
-                // A provider can reject a secondary read; the path/header evidence is still retained.
-            }
-        } else if (textCandidate) {
-            scan.skippedTextFiles++;
-        }
-    }
-
-    private static void addPathEvidence(FolderScan scan, String path, String marker) {
-        if (scan.pathEvidence.size() < 100) scan.pathEvidence.add(path + " — " + marker);
-    }
-
-    private static void collectTextMarkers(FolderScan scan, String path, byte[] data) {
-        String rawSample = new String(data, StandardCharsets.ISO_8859_1);
-        String sample = rawSample.toLowerCase(Locale.ROOT);
-        String lowerPath = path.toLowerCase(Locale.ROOT);
-        boolean likelyUnityHeader = lowerPath.contains("globalgamemanagers") ||
-                lowerPath.endsWith("/boot.config") || lowerPath.endsWith(".assets");
-        if (likelyUnityHeader && scan.unityVersionCandidates.size() < 32) {
-            Matcher versionMatcher = UNITY_VERSION_PATTERN.matcher(
-                    rawSample.substring(0, Math.min(rawSample.length(), 256)));
-            if (versionMatcher.find()) {
-                String candidate = path + " — " + versionMatcher.group();
-                if (!scan.unityVersionCandidates.contains(candidate))
-                    scan.unityVersionCandidates.add(candidate);
-            }
-        }
-        StringBuilder markers = new StringBuilder();
-        String[] tokens = {"unityplayer", "unityengine", "unityfs", "globalgamemanagers",
-                "il2cpp", "assembly-csharp", "mono-2.0", "libnn_gfx", "nvn"};
-        for (String token : tokens) {
-            if (sample.contains(token)) {
-                if (markers.length() > 0) markers.append(", ");
-                markers.append(token);
-                if (token.contains("il2cpp")) scan.hasIl2cpp = true;
-                if (token.contains("assembly-csharp") || token.contains("mono-2.0")) scan.hasMono = true;
-            }
-        }
-        if (markers.length() > 0 && scan.textEvidence.size() < 100)
-            scan.textEvidence.add(path + " — " + markers);
-    }
-
-    private static String describeIl2CppMetadataHeader(byte[] header, String path) {
-        if (header.length < 8) return path + " — truncated metadata header (" + header.length + " bytes)";
-        int magic = littleInt(header, 0);
-        if (magic != IL2CPP_METADATA_MAGIC) {
-            return path + " — expected IL2CPP metadata magic not found (0x" +
-                    Integer.toUnsignedString(magic, 16) + ")";
-        }
-        long version = Integer.toUnsignedLong(littleInt(header, 4));
-        return path + " — IL2CPP metadata magic confirmed; metadata version " + version;
     }
 
     private static String describeNsoHeader(byte[] header, String path) {
