@@ -589,8 +589,8 @@ public final class MainActivity extends Activity {
         if (scan.npdmReport != null) out.append("\nmain.npdm metadata:\n  ").append(scan.npdmReport).append('\n');
 
         out.append("\nNotes:\n");
-        out.append("- The scan only reads Switch module headers and hashes main.npdm; it does not unpack or modify game files.\n");
-        out.append("- NSO headers and build IDs identify executable inputs but do not prove the generic lifter supports every instruction.\n");
+        out.append("- The scan reads already-extracted NSO modules and main.npdm metadata only; it does not decrypt packages or modify files.\n");
+        out.append("- Dynamic import and relocation summaries help identify runtime requirements, but do not prove the game can boot.\n");
         out.append("- No executable payload was uploaded or included in this report.\n");
         return out.toString();
     }

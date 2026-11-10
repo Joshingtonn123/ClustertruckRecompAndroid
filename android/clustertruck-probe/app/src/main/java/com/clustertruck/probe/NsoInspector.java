@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.Locale;
 
 /**
  * Bounded, read-only metadata inspection of an already-extracted Nintendo Switch NSO module.
@@ -57,7 +58,7 @@ final class NsoInspector {
         }
     }
 
-    private static String headerSummary(byte[] h, String path) {
+    private static String headerSummary(byte[] h, String path) throws IOException {
         long flags = u32(h, 0x0c);
         long bss = u32(h, 0x3c);
         StringBuilder out = new StringBuilder(path).append(" — NSO0, build ID ")
