@@ -36,8 +36,8 @@ public final class NsoInspectorTest {
 
         byte[] strings = makeStrings();
         int needed = 1;
-        int importName = 1 + "libnn_sdk.so".length() + 1;
-        int startupName = importName + START.length() + 1;
+        int startupName = 1 + "libnn_sdk.so".length() + 1;
+        int importName = startupName + START.length() + 1;
         put32(rodata, 0x40, 1);              // DT_HASH: nbucket
         put32(rodata, 0x44, 3);              // DT_HASH: nchain (symbol count)
         putString(rodata, 0x80, strings);
