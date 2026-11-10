@@ -41,12 +41,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Prepare Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "$ANDROID_HOME/cmdline-tools/16.0/bin" >> "$GITHUB_PATH"
-          yes | "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" --licenses >/dev/null
-          "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install Android 36 platform
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Build the Android 11-compatible dump probe
         run: ./android/probe/gradlew -p android/clustertruck-probe --no-daemon :app:assembleDebug
       - name: Upload dump probe APK
