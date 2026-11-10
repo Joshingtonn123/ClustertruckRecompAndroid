@@ -268,14 +268,14 @@ public class LASRecompActivity extends SDLActivity {
             content.setOrientation(LinearLayout.VERTICAL);
             content.setPadding(pad, pad / 2, pad, pad / 2);
             AlertDialog dialog = new AlertDialog.Builder(a)
-                .setTitle("Choose game source")
+                .setTitle("Select the game")
                 .setView(content)
                 .setNegativeButton("Cancel", null)
                 .create();
 
-            a.addGameSourceButton(content, dialog, "Import XCI package", () -> a.showNxDumpInstructions("XCI"));
-            a.addGameSourceButton(content, dialog, "Import NSP package", () -> a.showNxDumpInstructions("NSP"));
-            a.addGameSourceButton(content, dialog, "Select extracted folder", () -> {
+            a.addGameSourceButton(content, dialog, "XCI package", () -> a.showNxDumpInstructions("XCI"));
+            a.addGameSourceButton(content, dialog, "NSP package", () -> a.showNxDumpInstructions("NSP"));
+            a.addGameSourceButton(content, dialog, "Extracted folder", () -> {
                 if (useInPlace) a.pickGameFolderInPlace();
                 else a.pickGameFolder();
             });
