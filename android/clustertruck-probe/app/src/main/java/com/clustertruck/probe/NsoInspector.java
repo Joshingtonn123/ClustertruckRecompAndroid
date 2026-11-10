@@ -32,13 +32,9 @@ final class NsoInspector {
         if (header.length < HEADER_SIZE || !asciiAt(header, 0, "NSO0")) return null;
         String summary = headerSummary(header, path);
 
-        if (reportedSize > MAX_RAW_BYTES) {
-            return summary + "\n    Dynamic metadata: skipped (module exceeds the 64 MiB safety limit)";
-        }
-
         byte[] raw = readModule(input, header, reportedSize);
         if (raw == null) {
-            return summary + "\n    Dynamic metadata: skipped (module exceeds the 64 MiB safety limit or has an inconsistent reported size)";
+            return summary + "\n    Dynamic metadata: skipped (required NSO segment data exceeds the 64 MiB safety limit or the file size is inconsistent)";
         }
         try {
             return summary + "\n" + dynamicSummary(raw);
@@ -274,30 +270,30 @@ final class NsoInspector {
     }
 
     private static byte[] readModule(InputStream input, byte[] header, long reportedSize) throws IOException {
-        if (reportedSize > 0) {
-            if (reportedSize > MAX_RAW_BYTES || reportedSize < header.length) return null;
-            byte[] raw = new byte[(int) reportedSize];
-            System.arraycopy(header, 0, raw, 0, header.length);
-            int offset = header.length;
-            while (offset < raw.length) {
-                int count = input.read(raw, offset, raw.length - offset);
-                if (count < 0) throw new IOException("NSO file ended before its reported size");
-                if (count == 0) continue;
-                offset += count;
-            }
-            return input.read() < 0 ? raw : null;
+        // Some dump/extraction tools preserve large padding or container-alignment tails after the NSO's
+        // compressed segments. Read only the bytes referenced by the NSO header; the unused tail is not
+        // part of the module image and must not make a valid main executable exceed the safety limit.
+        long needed = HEADER_SIZE;
+        for (int i = 0; i < 3; i++) {
+            long fileOffset = u32(header, 0x10 + i * 0x10);
+            long storedSize = u32(header, 0x60 + i * 4);
+            if (fileOffset < HEADER_SIZE || fileOffset > MAX_RAW_BYTES ||
+                    storedSize > MAX_RAW_BYTES - fileOffset) return null;
+            needed = Math.max(needed, fileOffset + storedSize);
         }
+        if (needed > MAX_RAW_BYTES || (reportedSize > 0 &&
+                (reportedSize < HEADER_SIZE || reportedSize < needed))) return null;
 
-        ByteArrayOutputStream out = new ByteArrayOutputStream(256 * 1024);
-        out.write(header);
-        byte[] buffer = new byte[32 * 1024];
-        int count;
-        while ((count = input.read(buffer)) >= 0) {
+        byte[] raw = new byte[(int) needed];
+        System.arraycopy(header, 0, raw, 0, header.length);
+        int offset = header.length;
+        while (offset < raw.length) {
+            int count = input.read(raw, offset, raw.length - offset);
+            if (count < 0) throw new IOException("NSO file ended before its required segment data");
             if (count == 0) continue;
-            if ((long) out.size() + count > MAX_RAW_BYTES) return null;
-            out.write(buffer, 0, count);
+            offset += count;
         }
-        return out.toByteArray();
+        return raw;
     }
 
     private static byte[] readAtMost(InputStream input, int limit) throws IOException {
