@@ -58,7 +58,7 @@ MAX_DEFAULT_FILES = 100_000
 MAX_DEFAULT_SCAN_BYTES = 128 * 1024 * 1024
 MAX_DEFAULT_TEXT_SAMPLE = 2 * 1024 * 1024
 IL2CPP_METADATA_MAGIC = 0xFAB11BAF
-UNITY_VERSION_RE = re.compile(rb"(?<![0-9])([0-9]{1,4}\\.[0-9]{1,2}\\.[0-9]{1,3}[abfp][0-9]+)(?![0-9])", re.IGNORECASE)
+UNITY_VERSION_RE = re.compile(rb"(?<![0-9])([0-9]{1,4}[.][0-9]{1,2}[.][0-9]{1,3}[abfp][0-9]+)(?![0-9])", re.IGNORECASE)
 
 
 def sha256_file(path: Path) -> str:
@@ -280,6 +280,7 @@ def scan_directory(root: Path, max_files: int, max_scan_bytes: int, max_nso: int
             if lower_name == "global-metadata.dat" and il2cpp_metadata is None:
                 try:
                     il2cpp_metadata = inspect_il2cpp_metadata(path)
+                    il2cpp_metadata["path"] = rel
                 except OSError as exc:
                     il2cpp_metadata = {"path": rel, "valid_magic": False, "error": str(exc)}
             if suffix in {".nsp", ".xci", ".nca", ".nsz", ".xcz"}:
