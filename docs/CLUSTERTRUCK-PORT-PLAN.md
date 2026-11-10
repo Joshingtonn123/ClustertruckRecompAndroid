@@ -88,7 +88,20 @@ The successful run is [workflow run 42807069464](https://github.com/Joshingtonn1
 - Add a reproducible ARM64 Android game build workflow after dependencies and game-specific inputs are known.
 - Test the Vulkan path separately on Adreno and Mali. A successful build does not establish that the game renders or performs well on every GPU.
 
-## Current status
+## Generic NSO recompiler path — 2026-11-10
+
+The existing generator now has an explicit `--generic` mode. In this mode it:
+- accepts an arbitrary NSO main build ID instead of requiring one of the Link's Awakening build IDs;
+- does not load the Zelda patch/address tables;
+- disables the Zelda randomizer's instruction substitutions;
+- records the actual NSO build ID beside the generated main function table.
+
+The new `tests/test_generic_recomp.py` builds a tiny synthetic NSO containing one AArch64 `RET` function. CI first verifies that the normal Zelda mode rejects its unknown build ID, then verifies that `--generic` generates the C function and Android dynamic-base function table for it.
+
+**What this proves:** the repository's NSO reader/lifter can run through code generation for a synthetic unknown-build-ID NSO without Zelda-specific instruction patches.
+
+**What it does not prove:** that Clustertruck's actual Switch main/sdk are NSOs accepted by this parser, that the real instruction set is fully supported, or that the Zelda Android runtime can boot Unity. The runtime still enforces Link's Awakening's game-version profile, and its loader, HLE, filesystem, and renderer assumptions remain title-specific. Do not build or install a game APK based on this generator test.
+
 
 **Diagnostic tooling and the earlier Android 11+ probe APK are built and CI-tested. A newer XCI HFS0 directory-inspection change is committed but still needs a fresh Android CI build and a test against the user's XCI. Clustertruck game compatibility is not yet established.** No Clustertruck Switch executable has yet been analyzed by this repository, no Clustertruck game-code library has been generated, and no playable Clustertruck APK has been built or tested. The next decision depends on a report from the actual Switch build.
 

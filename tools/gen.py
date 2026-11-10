@@ -534,22 +534,35 @@ def main():
                     default='asm' if platform.machine().lower() in ('arm64', 'aarch64') else 'c')
     ap.add_argument('--dyn-base', action='store_true',
                     help='Android: guest addresses relative to the window the runtime picks (lifter.gaddr)')
+    ap.add_argument('--generic', action='store_true',
+                    help='Do not apply Zelda build-ID tables, Zelda patches, or Zelda randomizer instruction patches')
     args = ap.parse_args()
     lifter.DYN_BASE = args.dyn_base
+    if args.generic:
+        # This repository's built-in patches are for Link's Awakening only. An unprofiled title must never inherit them.
+        RANDO_CODE.clear()
+
+    selected_build_id = None
 
     t0 = time.time()
     m = Module(args.name, args.nso, args.base, args.simd)
     if args.name == 'main':
-        global PATCHES
-        import game_addresses
-        try:
-            version = game_addresses.select_build_id(m.nso.build_id)
-        except game_addresses.UnknownGameVersion as e:
-            sys.exit(f'{args.name}: {e}')
-        import patches
-        PATCHES = patches.PATCHES
-        label, build_id = game_addresses.VERSIONS[version]
-        print(f'{args.name}: game version {label} (build {build_id[:16]}), address table {version}', file=sys.stderr)
+        if args.generic:
+            selected_build_id = m.nso.build_id
+            print(f'{args.name}: generic AArch64 profile (build {selected_build_id[:16]}), no title-specific patches',
+                  file=sys.stderr)
+        else:
+            global PATCHES
+            import game_addresses
+            try:
+                version = game_addresses.select_build_id(m.nso.build_id)
+            except game_addresses.UnknownGameVersion as e:
+                sys.exit(f'{args.name}: {e}')
+            import patches
+            PATCHES = patches.PATCHES
+            label, build_id = game_addresses.VERSIONS[version]
+            selected_build_id = build_id
+            print(f'{args.name}: game version {label} (build {build_id[:16]}), address table {version}', file=sys.stderr)
     starts = m.boundaries()
     hle = {}
     if args.hle and os.path.exists(args.hle):
@@ -675,7 +688,7 @@ def main():
                     '{ lasgame_gb = gb; }\n')
         write_if_changed(os.path.join(args.outdir, f'{args.name}_table.c'), f.getvalue())
     if args.name == 'main':  # (what this code was generated from: the game code library's id, runtime/gamelib.h)
-        write_if_changed(os.path.join(args.outdir, 'main_build_id.txt'), game_addresses.VERSIONS[version][1] + '\n')
+        write_if_changed(os.path.join(args.outdir, 'main_build_id.txt'), selected_build_id + '\n')
     print(f'{args.name}: wrote {nchunks} chunks, {time.time() - t0:.0f}s total', file=sys.stderr)
 
 
