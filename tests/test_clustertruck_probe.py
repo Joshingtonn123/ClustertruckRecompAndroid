@@ -22,6 +22,26 @@ class ClustertruckProbeTests(unittest.TestCase):
         sample[0x100:0x104] = b"HEAD"
         self.assertEqual(probe.classify_magic(bytes(sample)), "XCI cartridge image header")
 
+
+    def test_classifies_elf_magic(self):
+        self.assertEqual(probe.classify_magic(b"\x7fELF" + b"\0" * 512), "ELF executable")
+
+    def test_parses_pfs0_directory_without_extracting_payload(self):
+        import struct
+        with tempfile.TemporaryDirectory() as temp:
+            package = Path(temp) / "clustertruck.nsp"
+            payload = b"NCA3" + b"\0" * 700
+            names = b"program.nca\0"
+            header = b"PFS0" + struct.pack("<III", 1, len(names), 0)
+            entry = struct.pack("<QQII", 0, len(payload), 0, 0)
+            package.write_bytes(header + entry + names + payload)
+            report = probe.parse_pfs0(package)
+        self.assertEqual(report["entry_count"], 1)
+        self.assertFalse(report["payloads_extracted"])
+        self.assertEqual(report["entries"][0]["name"], "program.nca")
+        self.assertEqual(report["entries"][0]["size_bytes"], len(payload))
+        self.assertEqual(report["entries"][0]["signature"], "NCA content archive (may be encrypted)")
+
     def test_unity_path_markers(self):
         markers = probe.path_markers("romfs/Data/Managed/Metadata/global-metadata.dat")
         self.assertIn("IL2CPP global metadata", markers)
