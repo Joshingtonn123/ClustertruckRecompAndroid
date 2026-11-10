@@ -214,7 +214,7 @@ public final class MainActivity extends Activity {
                     out.append("Container: UnityFS asset bundle\n");
                 } else if (all.length >= 0x104 && asciiAt(all, 0x100, 4).equals("HEAD")) {
                     out.append("Container: XCI cartridge image (HEAD signature found at 0x100)\n");
-                    out.append("XCI partition contents were not unpacked or decrypted.\n");
+                    inspectXciPartitions(uri, size, all, out);
                 } else if (all.length >= 0x204 &&
                         (asciiAt(all, 0x200, 4).equals("NCA2") || asciiAt(all, 0x200, 4).equals("NCA3"))) {
                     out.append("Container: NCA content archive (header signature visible at 0x200)\n");
@@ -277,6 +277,124 @@ public final class MainActivity extends Activity {
         }
         if (fileCount > displayed) out.append("  … ").append(fileCount - displayed).append(" more entries omitted\n");
         out.append("Only the PFS0 directory and filenames were read; payload files were not extracted.\n");
+    }
+
+    private void inspectXciPartitions(Uri uri, long fileSize, byte[] header, StringBuilder out) throws IOException {
+        if (header.length < 0x140) {
+            out.append("XCI header is truncated; partition metadata unavailable.\n");
+            return;
+        }
+        long hfsOffset = littleLong(header, 0x130);
+        long hfsSize = littleLong(header, 0x138);
+        out.append("Root HFS0 offset: 0x").append(Long.toHexString(hfsOffset)).append('\n');
+        out.append("Root HFS0 header size: ").append(hfsSize).append(" bytes\n");
+        if (hfsOffset < 0 || hfsSize < 0x10 || hfsOffset > fileSize ||
+                hfsSize > fileSize - hfsOffset) {
+            out.append("Root HFS0 range is outside the selected file; no partition listing possible.\n");
+            return;
+        }
+        List<HfsEntry> partitions = readHfs0(uri, hfsOffset, fileSize, "root", out);
+        if (partitions == null) return;
+        for (HfsEntry partition : partitions) {
+            String label = partition.name;
+            if (!("secure".equals(label) || "normal".equals(label) ||
+                    "update".equals(label) || "logo".equals(label))) continue;
+            long partitionOffset = partition.absoluteOffset;
+            out.append("\nPartition: ").append(label).append(" (")
+                    .append(partition.size).append(" bytes)\n");
+            if (partition.size < 0x10 || partitionOffset < 0 ||
+                    partitionOffset > fileSize || partition.size > fileSize - partitionOffset) {
+                out.append("  Invalid partition range; skipped.\n");
+                continue;
+            }
+            List<HfsEntry> files = readHfs0(uri, partitionOffset, fileSize, label, out);
+            if (files == null) continue;
+            int shown = 0;
+            for (HfsEntry entry : files) {
+                if (shown++ >= 120) {
+                    out.append("  … additional entries omitted\n");
+                    break;
+                }
+                out.append("  ").append(entry.name).append(" — ")
+                        .append(entry.size).append(" bytes");
+                if (entry.signature != null) out.append(" [").append(entry.signature).append("]");
+                out.append('\n');
+            }
+        }
+        out.append("\nOnly XCI/HFS0 directory metadata and visible file signatures were read; NCA payloads were not decrypted or extracted.\n");
+    }
+
+    private static final class HfsEntry {
+        final String name;
+        final long size;
+        final long absoluteOffset;
+        final String signature;
+        HfsEntry(String name, long size, long absoluteOffset, String signature) {
+            this.name = name;
+            this.size = size;
+            this.absoluteOffset = absoluteOffset;
+            this.signature = signature;
+        }
+    }
+
+    private List<HfsEntry> readHfs0(Uri uri, long offset, long fileSize,
+                                    String label, StringBuilder out) throws IOException {
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            if (input == null) throw new IOException("Android could not reopen XCI stream");
+            skipFully(input, offset);
+            byte[] magic = readExactly(input, 4);
+            if (!"HFS0".equals(ascii(magic))) {
+                out.append("  ").append(label).append(": expected HFS0, found ")
+                        .append(ascii(magic)).append('\n');
+                return null;
+            }
+            byte[] rest = readExactly(input, 12);
+            int count = littleInt(rest, 0);
+            long stringSizeLong = littleUnsignedInt(rest, 4);
+            if (count < 0 || count > MAX_PFS0_ENTRIES || stringSizeLong > MAX_STRING_TABLE) {
+                out.append("  ").append(label).append(": HFS0 directory exceeds safe parser limits.\n");
+                return null;
+            }
+            int stringSize = (int) stringSizeLong;
+            long tableSize = (long) count * 0x40L;
+            long dataStart = offset + 0x10L + tableSize + stringSizeLong;
+            if (dataStart < offset || dataStart > fileSize ||
+                    tableSize + stringSizeLong > fileSize - offset - 0x10L) {
+                out.append("  ").append(label).append(": HFS0 directory extends beyond the XCI.\n");
+                return null;
+            }
+            byte[] table = readExactly(input, (int) tableSize);
+            byte[] strings = readExactly(input, stringSize);
+            ByteBuffer entries = ByteBuffer.wrap(table).order(ByteOrder.LITTLE_ENDIAN);
+            List<HfsEntry> result = new ArrayList<>();
+            out.append("  ").append(label).append(" HFS0 entries: ").append(count).append('\n');
+            for (int i = 0; i < count; i++) {
+                long relativeOffset = entries.getLong();
+                long length = entries.getLong();
+                int nameOffset = entries.getInt();
+                entries.getInt();
+                entries.position(entries.position() + 40);
+                if (nameOffset < 0 || nameOffset >= strings.length) continue;
+                int end = nameOffset;
+                while (end < strings.length && strings[end] != 0) end++;
+                if (end == strings.length || relativeOffset < 0 || length < 0 ||
+                        relativeOffset > fileSize - dataStart ||
+                        length > fileSize - dataStart - relativeOffset) continue;
+                String name = new String(strings, nameOffset, end - nameOffset, StandardCharsets.UTF_8);
+                long absolute = dataStart + relativeOffset;
+                String signature = null;
+                if (length >= 4) {
+                    try (InputStream item = getContentResolver().openInputStream(uri)) {
+                        if (item != null) {
+                            skipFully(item, absolute);
+                            signature = ascii(readExactly(item, 4));
+                        }
+                    }
+                }
+                result.add(new HfsEntry(name, length, absolute, signature));
+            }
+            return result;
+        }
     }
 
     private String inspectFolder(Uri treeUri) throws IOException {
@@ -598,6 +716,10 @@ public final class MainActivity extends Activity {
 
     private static long littleUnsignedInt(byte[] bytes, int offset) {
         return Integer.toUnsignedLong(littleInt(bytes, offset));
+    }
+
+    private static long littleLong(byte[] bytes, int offset) {
+        return ByteBuffer.wrap(bytes, offset, 8).order(ByteOrder.LITTLE_ENDIAN).getLong();
     }
 
     private static String hexRange(byte[] bytes, int offset, int length) {
