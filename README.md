@@ -28,11 +28,11 @@ The LAS-derived Android app source has now been adapted into a separate Clustert
 
 The Clustertruck profile now has its own launcher icon, app identity, data/settings/log names and foreground notification. The Android setup flow is worded for a Clustertruck Switch dump. XCI/NSP choices still hand extraction to NxDump; this app does not yet parse or decrypt those containers itself.
 
-The APK's on-device generator bundle contains the generic NSO generator and its compiler dependencies, but does not package the Zelda build-ID tables, instruction patch module, version-specific hot-function list or randomizer patch data. The Android runtime also hides Zelda-only pages such as Save Editor, Randomizer, Warp, Cheats, Gameplay and Cosmetics; only common Controls, Video and Audio pages remain exposed.
+When the Android generator dependencies are built, the Clustertruck app package is configured to bundle the generic NSO generator and compiler runtime. It does not package the Zelda build-ID tables, instruction patch module, version-specific hot-function list or randomizer patch data. The Android runtime also hides Zelda-only pages such as Save Editor, Randomizer, Warp, Cheats, Gameplay and Cosmetics; only common Controls, Video and Audio pages remain exposed.
 
 **This is an adapted app foundation, not a playable game release.** The generic NSO recompilation step can generate native code, but Unity startup, Switch service emulation, game-specific memory/filesystem integration and Clustertruck rendering are not implemented. The app's boot gate remains in place so it will not pretend the game is ready.
 
-The lightweight Clustertruck workflow still builds the diagnostic probe APK and runs source/generator tests. It does not package the full recompilation app yet; the probe APK is not the Clustertruck app.
+The lightweight Clustertruck workflow builds the diagnostic probe APK, runs source/generator tests, and performs a Gradle dry-run of the Clustertruck app project. It does not assemble the full recompilation app yet; the probe APK is not the Clustertruck app.
 
 ## Diagnostic app
 
