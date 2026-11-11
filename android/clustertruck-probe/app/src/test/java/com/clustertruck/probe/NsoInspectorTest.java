@@ -58,7 +58,7 @@ public final class NsoInspectorTest {
         sdk.exports.add("nn::TestImport");
 
         String audit = NsoInspector.linkAudit(Arrays.asList(main, sdk));
-        assertTrue(audit, audit.contains("exefs/main: 1 imports; 1 found in mapped module exports; 0 not found"));
+        assertTrue(audit, audit.contains("main: 1 imports; 1 found in mapped module exports; 0 not found"));
         assertTrue(audit, audit.contains("main, sdk and subsdk0 only"));
     }
 
