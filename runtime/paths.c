@@ -71,7 +71,7 @@ static bool writable(const char *dir) {
 
 static void fail(const char *msg) {
     fprintf(stderr, "%s\n", msg);
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "LAS Recomp", msg, NULL);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Clustertruck Recomp", msg, NULL);
     exit(1);
 }
 
@@ -97,7 +97,7 @@ void rt_paths_init(void) {
         const char *ext = SDL_GetAndroidExternalStoragePath();
         snprintf(root, sizeof root, "%s", ext ? ext : SDL_GetAndroidInternalStoragePath());
 #elif defined(__linux__)
-        // (the AppImage is read-only): $XDG_DATA_HOME/lasrecomp, ~/.local/share/lasrecomp by default
+        // (the AppImage is read-only): $XDG_DATA_HOME/clustertruck-recomp, ~/.local/share/lasrecomp by default
         const char *xdg = getenv("XDG_DATA_HOME"), *home = getenv("HOME");
         if (xdg && *xdg == '/') snprintf(root, sizeof root, "%s/lasrecomp", xdg);
         else snprintf(root, sizeof root, "%s/.local/share/lasrecomp", home && *home ? home : "/tmp");
@@ -110,11 +110,11 @@ void rt_paths_init(void) {
     char msg[1400];
     if (!is_dir(root) || !writable(root) || chdir(root) != 0) {
 #ifdef _WIN32
-        snprintf(msg, sizeof msg, "LAS Recomp can't write to its folder:\n%s\n\nIt keeps game files, saves and seeds "
-                 "next to the program. Move the \"LAS Recomp\" folder somewhere you can write to (e.g. Documents or "
+        snprintf(msg, sizeof msg, "Clustertruck Recomp can't write to its folder:\n%s\n\nIt keeps game files, saves and seeds "
+                 "next to the program. Move the \"Clustertruck Recomp\" folder somewhere you can write to (e.g. Documents or "
                  "Desktop, not Program Files) and start it again.", root);
 #else
-        snprintf(msg, sizeof msg, "LAS Recomp can't write to its data folder:\n%s", root);
+        snprintf(msg, sizeof msg, "Clustertruck Recomp can't write to its data folder:\n%s", root);
 #endif
         fail(msg);
     }
