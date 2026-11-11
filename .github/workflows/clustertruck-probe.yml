@@ -48,62 +48,6 @@ jobs:
         run: python -m unittest discover -s tests -p "test_generic_recomp.py" -v
 
 
-  android-full-app:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Set up Android SDK and NDK
-        uses: android-actions/setup-android@v4
-      - name: Install Android 11+ build toolchain
-        run: |
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.16248370" "cmake;3.30.4"
-          echo "ANDROID_NDK=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_LINUX=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
-      - name: Install host build tools when missing
-        run: |
-          missing=0
-          for tool in cc make pkg-config autoconf automake libtoolize; do
-            if ! command -v "$tool" >/dev/null 2>&1; then
-              echo "Missing host tool: $tool"
-              missing=1
-            fi
-          done
-          if [ "$missing" -eq 1 ]; then
-            sudo apt-get update
-            sudo apt-get install -y pkg-config build-essential autoconf automake libtool
-          else
-            echo "All required host build tools are already installed; skipping apt."
-          fi
-      - name: Build Android runtime dependencies
-        env:
-          BUILD_JOBS: 2
-        run: bash android/deps/build_deps.sh
-      - name: Build on-device recompiler dependencies
-        env:
-          BUILD_JOBS: 2
-        run: bash android/deps/build_gen_deps.sh
-      - name: Build full Android app
-        run: bash ./android/lasrecomp/gradlew -p android/lasrecomp --no-daemon :app:assembleDebug
-      - name: Upload full Android app
-        uses: actions/upload-artifact@v4
-        with:
-          name: clustertruck-recomp-android-debug
-          path: android/lasrecomp/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 7
-
   android-dump-probe:
     runs-on: ubuntu-latest
     steps:
