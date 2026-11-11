@@ -24,7 +24,7 @@ public final class NsoInspectorTest {
         String report = NsoInspector.inspect(
                 new ByteArrayInputStream(raw), "exefs/main", (64L * 1024 * 1024) + 1);
         assertNotNull(report);
-        assertTrue(report, report.contains("1 imports, 1 exports, 1 relocations"));
+        assertTrue(report, report.contains("1 imports, 1 exports, 1 RELA relocations"));
         assertTrue(report, report.contains("nn::init::Start export: PRESENT"));
     }
 
@@ -35,7 +35,7 @@ public final class NsoInspectorTest {
         System.out.println("SYNTHETIC NSO REPORT:\\n" + report);
 
         assertNotNull(report);
-        assertTrue(report, report.contains("1 imports, 1 exports, 1 relocations"));
+        assertTrue(report, report.contains("1 imports, 1 exports, 1 RELA relocations"));
         assertTrue(report, report.contains("nn::init::Start export: PRESENT"));
         assertTrue(report, report.contains("Needed libraries: libnn_sdk.so"));
         assertTrue(report, report.contains("nn::TestImport"));
@@ -104,7 +104,7 @@ public final class NsoInspectorTest {
 
         String report = NsoInspector.inspect(
                 new ByteArrayInputStream(padded), "exefs/main", padded.length);
-        assertTrue(report, report.contains("1 imports, 1 exports, 1 relocations"));
+        assertTrue(report, report.contains("1 imports, 1 exports, 1 RELA relocations"));
         assertTrue(report, report.contains("nn::init::Start export: PRESENT"));
         assertTrue(report, report.contains("Needed libraries: libnn_sdk.so"));
     }

@@ -11,7 +11,8 @@ R_AARCH64_ABS64, R_AARCH64_GLOB_DAT, R_AARCH64_JUMP_SLOT, R_AARCH64_RELATIVE = 2
 
 class Nso:
     def __init__(self, path):
-        raw = open(path, 'rb').read()
+        with open(path, 'rb') as stream:
+            raw = stream.read()
         assert raw[:4] == b'NSO0', path
         flags = struct.unpack_from('<I', raw, 0xC)[0]
         self.build_id = raw[0x40:0x60].rstrip(b'\0').hex()
@@ -37,6 +38,39 @@ class Nso:
 
     def u32(self, off): return struct.unpack_from('<I', self.image, off)[0]
     def u64(self, off): return struct.unpack_from('<Q', self.image, off)[0]
+
+    def _gnu_hash_nsyms(self, hash_off):
+        """Return dynsym count from a GNU hash table, without requiring DT_HASH."""
+        if hash_off < 0 or hash_off + 16 > len(self.image):
+            raise ValueError("GNU hash header is outside the module image")
+        nbuckets, symoffset, bloom_size, _ = struct.unpack_from('<IIII', self.image, hash_off)
+        if nbuckets == 0 or nbuckets > 1_000_000 or symoffset > 1_000_000 or bloom_size > 1_000_000:
+            raise ValueError("GNU hash dimensions exceed the safety limit")
+        buckets_off = hash_off + 16 + bloom_size * 8
+        buckets_size = nbuckets * 4
+        if buckets_off > len(self.image) or buckets_size > len(self.image) - buckets_off:
+            raise ValueError("GNU hash buckets extend beyond the module image")
+        chains_off = buckets_off + buckets_size
+        last_bucket = 0
+        for i in range(nbuckets):
+            bucket = self.u32(buckets_off + i * 4)
+            if bucket and bucket < symoffset:
+                raise ValueError("GNU hash bucket points before the symbol offset")
+            last_bucket = max(last_bucket, bucket)
+        if last_bucket == 0:
+            return symoffset
+        if last_bucket >= 1_000_000:
+            raise ValueError("GNU hash symbol index exceeds the safety limit")
+        symbol = last_bucket
+        while symbol < 1_000_000:
+            chain_off = chains_off + (symbol - symoffset) * 4
+            if chain_off < 0 or chain_off + 4 > len(self.image):
+                raise ValueError("GNU hash chain extends beyond the module image")
+            chain = self.u32(chain_off)
+            symbol += 1
+            if chain & 1:
+                return symbol
+        raise ValueError("GNU hash chain exceeds the safety limit")
 
     def _parse_mod0(self):
         mod0 = self.u32(4)
