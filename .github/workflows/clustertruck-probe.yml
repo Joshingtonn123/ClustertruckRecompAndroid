@@ -61,9 +61,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
       - name: Install Android 36 platform
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.16248370" "cmake;3.30.4"
       - name: Test and build the Android 11-compatible dump probe
         run: bash ./android/probe/gradlew -p android/clustertruck-probe --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: Validate Clustertruck app Gradle configuration (no APK build)
+        run: bash ./android/probe/gradlew -p android/lasrecomp --no-daemon --dry-run :app:assembleDebug
       - name: Upload dump probe APK
         uses: actions/upload-artifact@v4
         with:
