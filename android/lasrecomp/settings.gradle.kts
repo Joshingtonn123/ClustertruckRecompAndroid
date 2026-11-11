@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LASRecomp"
+rootProject.name = "ClustertruckRecomp"
 include(":app")
