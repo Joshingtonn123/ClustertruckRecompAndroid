@@ -1,6 +1,6 @@
 // Start screen, shown before the game boots (user 2026-10-08, styled after Dusklight's launcher): PLAY (with
 // ‹ Vanilla / seed › picker), SETTINGS, QUIT, game-files status at the lower left. Nothing of the game ships with
-// LAS Recomp: on first launch the user picks the folder with their own game files (1.0.0, 1.0.1 or 1.1.0), we check
+// Clustertruck Recomp: on first launch the user picks the folder with their own game files (1.0.0, 1.0.1 or 1.1.0), we check
 // the main module's build id (runtime/game_addresses/versions.h), copy the files and build the game's data image; PLAY stays disabled until that worked. The background is a frame of the game's own title movie (from the user's files) once extracted.
 //
 // Skipped with --play, LARECOMP_NO_LAUNCHER=1, or any scripted test run (LARECOMP_INPUT): tests boot straight in.
@@ -103,8 +103,8 @@ static void save_png(id<MTLTexture> tex, const char *path) {
 // The start screen asks GitHub for the project's releases once per launch (a background curl, which macOS and
 // Windows 10+ ship) and offers the best one if it outranks this build: any v1.0.0+ above every beta, betas by
 // number; other tags (the alpha_* ones) are ignored. Offline / no curl / anything unexpected: nothing is shown.
-#define RELEASES_URL "https://api.github.com/repos/peiikai/LASRecomp/releases?per_page=100"
-#define RELEASE_PAGE "https://github.com/peiikai/LASRecomp/releases/tag/"
+#define RELEASES_URL "https://api.github.com/repos/Joshingtonn123/ClustertruckRecompAndroid/releases?per_page=100"
+#define RELEASE_PAGE "https://github.com/Joshingtonn123/ClustertruckRecompAndroid/releases/tag/"
 
 static long long tag_rank(const std::string &t) {
     int n, a, b, c;
@@ -145,7 +145,7 @@ static void *update_thread(void *) {
         std::string out = std::string(rt_data_root()) + "/cache/releases.json";
         mkdir((std::string(rt_data_root()) + "/cache").c_str(), 0755);
         const char *av[] = {curl.c_str(), "-fsSL", "--max-time", "15", "-H", "Accept: application/vnd.github+json",
-                            "-A", "LASRecomp/" LARECOMP_VERSION, RELEASES_URL, NULL};
+                            "-A", "ClustertruckRecomp/" LARECOMP_VERSION, RELEASES_URL, NULL};
         PlatProc p = plat_spawn(av, out.c_str(), false);
         if (!p || plat_proc_wait(p, true) != 0) { remove(out.c_str()); return NULL; }
         if (FILE *f = fopen(out.c_str(), "rb")) {
@@ -186,9 +186,9 @@ static std::string check_copied_files(const std::string &root) {
     if (!game_version_of(root.c_str())) {
 #ifdef __ANDROID__
         if (file_exists(root + "/exefs/sdk") && gamelib_present(root.c_str()))
-            return "Generic game code compiled; game boot support is not integrated yet";
+            return "Clustertruck code compiled; Unity startup, Switch services and game rendering are not integrated yet";
 #endif
-        return "Wrong game version (needs v1.0.0, v1.0.1 or v1.1.0)";
+        return "Clustertruck game code is not built yet";
     }
 #ifdef __ANDROID__
     char linked[1024];  // (the game files used in place: the player's own romfs/ or romfs.bin - romfs_build.h romfs.link)
@@ -247,7 +247,7 @@ static void set_failure(int k) {
         "Choose the folder that holds the game files.",
         "Choose the folder that holds the game files.",
         "Make sure there's about 12 GB free and try again.",
-        "LAS Recomp needs version 1.0.0, 1.0.1 or 1.1.0 of the game.",
+        "Clustertruck Recomp needs version 1.0.0, 1.0.1 or 1.1.0 of the game.",
         "Some files are missing. Choose the folder again; if it happens again, dump the game again.",
         "Make sure there's about 2 GB free and try again. If it keeps happening, report it on Discord or GitHub."};
     if (k >= 1 && k <= 6) set_job(head[k], true, hint[k]);
@@ -368,7 +368,7 @@ static void *extract_thread(void *) {
     if (exefs.empty() || romfs.empty()) { set_failure(unusable ? FAIL_UNUSABLE : FAIL_NOT_FOUND); goto done; }
     if (!build_id_ok(exefs)) { set_failure(FAIL_VERSION); goto done; }
     {
-        // (the picked folder can't be LAS Recomp's own copy: setting up again deletes that first)
+        // (the picked folder can't be Clustertruck Recomp's own copy: setting up again deletes that first)
         char a[4096], b[4096];
         mkdir(g_root.c_str(), 0755);
         if (realpath(exefs.c_str(), a) && realpath(g_root.c_str(), b) && !strncmp(a, b, strlen(b)) &&
@@ -1005,8 +1005,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_lasrecomp_LASRecompActivity_nativeImp
 extern "C" JNIEXPORT void JNICALL Java_com_lasrecomp_LASRecompActivity_nativeDriverPicked(JNIEnv *env, jclass, jstring name) {
     const char *n = env->GetStringUTFChars(name, NULL);
     pthread_mutex_lock(&g_lock);
-    g_driver_msg = n && !strcmp(n, "-") ? tr("The system's driver from the next start on. Restart LAS Recomp to use it.")
-                   : n && *n                ? std::string(n) + tr(" installed. Restart LAS Recomp to use it.")
+    g_driver_msg = n && !strcmp(n, "-") ? tr("The system's driver from the next start on. Restart Clustertruck Recomp to use it.")
+                   : n && *n                ? std::string(n) + tr(" installed. Restart Clustertruck Recomp to use it.")
                                             : tr("That file isn't a driver.");
     g_driver_restart = n && *n;
     pthread_mutex_unlock(&g_lock);
@@ -1221,7 +1221,7 @@ extern "C" void launcher_play_seed(const char *seed) {
 }
 static float g_menu_gap = 0.35f;  // space under each item, in line heights
 
-// The first PLAY ever (settings.menu_tip_seen): a note on opening the LAS Recomp menu in game (it isn't obvious),
+// The first PLAY ever (settings.menu_tip_seen): a note on opening the Clustertruck Recomp menu in game (it isn't obvious),
 // OK starts the game. Returns true once OK is pressed.
 static bool g_tip_test;  // (LARECOMP_LAUNCHER_SHOT=<frame>:tip)
 // First PLAY ever, before the menu note: authentic 16:9 or the unlocked (fill the window) aspect ratio.
@@ -1283,9 +1283,9 @@ static bool menu_tip(float s) {
         static const char *const pad[] = {"Minus + Plus", "View + Menu", "Create + Options"};
         ImGui::PushTextWrapPos(0);
 #ifdef __ANDROID__
-        ImGui::TextUnformatted(tr("LAS Recomp has its own menu for settings, cosmetics and more."));
+        ImGui::TextUnformatted(tr("Clustertruck Recomp has its own menu for settings, cosmetics and more."));
 #else
-        ImGui::TextUnformatted("LAS Recomp has its own menu for settings, the randomizer, cosmetics and more.");
+        ImGui::TextUnformatted("Clustertruck Recomp has its own menu for settings, the randomizer, cosmetics and more.");
 #endif
         ImGui::Spacing();
         int fam = bind_label_family() % 3;
@@ -1583,10 +1583,10 @@ static void prelaunch_tab(float sc) {
         changed |= tri("lrz", &g_settings.turnip_lrz, lrz_auto);
         ImGui::TextDisabled("%s", tr("Turnip's early depth test, a little faster. Off can fix missing or broken drawing on "
                                      "some Adreno GPUs. Automatic: on for Adreno 7xx and 8xx GPUs, off for the others. "
-                                     "Applies when LAS Recomp restarts."));
+                                     "Applies when Clustertruck Recomp restarts."));
         bool lrz_now = g_settings.turnip_lrz < 0 ? lrz_auto : g_settings.turnip_lrz != 0;
         if (lrz_now != vk_lrz_at_start()) {  // (Turnip reads it once, when the app starts)
-            ImGui::Text("%s", tr("Restart LAS Recomp to apply it."));
+            ImGui::Text("%s", tr("Restart Clustertruck Recomp to apply it."));
             ImGui::SameLine();
             ImGui::PushID("lrz");  // (the driver's own Restart now may be showing too)
             if (ImGui::Button(tr("Restart now"))) {
@@ -1656,7 +1656,7 @@ static void prelaunch_tab(float sc) {
         ImGui::PushFont(g_font_menu);
         ImGui::TextColored(settings_warning_color(), "%s", tr("Are you sure?"));
         ImGui::PopFont();
-        ImGui::Text(tr("This deletes LAS Recomp's copy of the game files (%.1f GB)."), gb);
+        ImGui::Text(tr("This deletes Clustertruck Recomp's copy of the game files (%.1f GB)."), gb);
         ImGui::TextDisabled("%s", tr("Saves, seeds and settings are kept. Your own game files aren't touched."));
         if (rt_dev_mode()) {  // (a source checkout: the files are the project's own extracted/)
             bool abs = !g_root.empty() && (g_root[0] == '/' || (g_root.size() > 1 && g_root[1] == ':'));
@@ -1666,7 +1666,7 @@ static void prelaunch_tab(float sc) {
         ImGui::Spacing();
         if (ImGui::Button(tr("Delete"), ImVec2(220 * sc, 0))) {
             bool ok = rt_remove_game_files(g_root.c_str());  // (runtime/paths.c: only what the extraction made)
-            set_job(ok ? "Game files deleted." : "Could not delete the game files (not in LAS Recomp's data folder?).", !ok);
+            set_job(ok ? "Game files deleted." : "Could not delete the game files (not in Clustertruck Recomp's data folder?).", !ok);
             g_files_deleted = true, gb = -1;
 #ifdef __ANDROID__
             if (ok) {  // (the release in play gone: another one installed takes its place - the start screen then goes
@@ -1685,7 +1685,7 @@ static void prelaunch_tab(float sc) {
         ImGui::EndPopup();
     }
 #ifdef __ANDROID__
-    {   // the releases installed (the start screen's PLAY ‹ › switches them), another one added from its folder, one put
+    {   // Zelda release variants (not used by the generic Clustertruck profile; the start screen's PLAY ‹ › switches them), another one added from its folder, one put
         // aside removed (a tap, then a confirmation)
         static std::string confirm_rm;
         std::vector<std::string> others = other_versions();
@@ -1986,7 +1986,7 @@ extern "C" void launcher_run(const char *root) {
             ImGui::SetCursorPos(ImVec2(x0, 120 * s));
             ImGui::PushFont(g_font_title);
             if (page == MAIN) {  // gold to orange, shadowed (not behind the Settings / Game Files windows)
-                const char *t = "LAS Recompiled";
+                const char *t = "Clustertruck Recompiled";
                 ImVec2 p = ImGui::GetCursorScreenPos();
                 text_fx(ImGui::GetWindowDrawList(), ImGui::GetFont(), ImGui::GetFontSize(), p, IM_COL32(255, 232, 120, 255),
                         IM_COL32(255, 138, 48, 255), t, 3 * s);
@@ -2326,15 +2326,15 @@ extern "C" void launcher_run(const char *root) {
                     dl->AddLine(ImVec2(x + u * 0.35f, cy + u * 0.35f), ImVec2(x + u, cy - u * 0.4f), g, fs * 0.11f);
                 };
                 std::string src_d = tr("The folder with your own game folders (exefs/romfs) of The Legend of Zelda: Link's "
-                                       "Awakening for Nintendo Switch. The game isn't included with LAS Recomp.");
+                                       "Awakening for Nintendo Switch. The game isn't included with Clustertruck Recomp.");
                 if (!src.empty()) src_d += std::string(tr("\n\nChosen: ")) + src;
                 // the step that's running / its result, under the rows and in the Set up row's explanation
                 const std::string &job_line = job;
-                std::string ex_d = tr("Copies the game files LAS Recomp needs and recompiles the game from them. This only "
+                std::string ex_d = tr("Copies the game files Clustertruck Recomp needs and recompiles the game from them. This only "
                                       "needs to be done once and may take a while. Your own files aren't changed.");
 #ifdef __ANDROID__
                 if (native_wanted())
-                    ex_d = tr("Copies the game files LAS Recomp needs (native game code: nothing to build). Your own files "
+                    ex_d = tr("Copies the game files Clustertruck Recomp needs (native game code: nothing to build). Your own files "
                               "aren't changed.");
 #endif
                 if (!job.empty()) ex_d += "\n\n" + std::string(tr(job.c_str())) + (job_hint.empty() ? "" : ".\n" + std::string(tr(job_hint.c_str())));
@@ -2375,7 +2375,7 @@ extern "C" void launcher_run(const char *root) {
                         int w = g_settings.files_in_place ? 1 : 0;
                         if (busy) opt_disable_next();
                         opt_choice("Game files", &w, ways, 2, 0,
-                                   "Copy them: the setup copies the game data into LAS Recomp's folder - your folder can "
+                                   "Copy them: the setup copies the game data into Clustertruck Recomp's folder - your folder can "
                                    "be moved or deleted afterwards.\n\nUse them in place: the game reads its data from "
                                    "your folder (its romfs/ or romfs.bin), no copy - it saves the space and the wait. It "
                                    "needs the permission to access all files (Android asks), and the folder must stay "
@@ -2408,7 +2408,7 @@ extern "C" void launcher_run(const char *root) {
                     }
                     files_gb = -1;  // (re-measured after a setup)
                 } else {
-                    // DELETE: frees LAS Recomp's copy (runtime/paths.c removes only what the setup made, only inside
+                    // DELETE: frees Clustertruck Recomp's copy (runtime/paths.c removes only what the setup made, only inside
                     // the data root). Saves, seeds, settings and the user's own files stay.
                     if (files_gb < 0) files_gb = rt_game_files_size(g_root.c_str()) / 1e9;
                     char gb[32];
@@ -2450,14 +2450,14 @@ extern "C" void launcher_run(const char *root) {
 #endif
                     opt_section("Game files");
                     if (!g_confirm_delete) {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(CLUSTERTRUCK_GENERIC_TITLE)
                         bool keep_base = base_kept();
                         if (keep_base) opt_disable_next();
 #else
                         bool keep_base = false;
 #endif
                         if (opt_action("Delete game files", gb, keep_base ? "The base release (1.0.0) stays while other "
-                                       "versions are installed." : "Frees the space LAS Recomp's copy of the game files takes. "
+                                       "versions are installed." : "Frees the space Clustertruck Recomp's copy of the game files takes. "
                                        "Saves, seeds and settings are kept, and your own game files aren't touched: you can "
                                        "set the game files up again from them.", true))
                             g_confirm_delete = true;
@@ -2474,7 +2474,7 @@ extern "C" void launcher_run(const char *root) {
 #endif
                             status = check_game_files(g_root);
                             if (ok) set_job("Game files deleted.");
-                            else set_job("Couldn't delete the game files", true, "They aren't in LAS Recomp's data folder, "
+                            else set_job("Couldn't delete the game files", true, "They aren't in Clustertruck Recomp's data folder, "
                                          "so they were left alone.");
                             if (!status.empty()) g_bg = 0;
                             g_confirm_delete = false, files_gb = -1;
