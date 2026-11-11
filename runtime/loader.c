@@ -15,11 +15,91 @@ static unsigned g_missing_import_logs;
 #endif
 
 enum { DT_NULL = 0, DT_PLTRELSZ = 2, DT_HASH = 4, DT_STRTAB = 5, DT_SYMTAB = 6, DT_RELA = 7, DT_RELASZ = 8,
-       DT_JMPREL = 23, DT_INIT_ARRAY = 25, DT_FINI_ARRAY = 26, DT_INIT_ARRAYSZ = 27, DT_FINI_ARRAYSZ = 28 };
+       DT_JMPREL = 23, DT_INIT_ARRAY = 25, DT_FINI_ARRAY = 26, DT_INIT_ARRAYSZ = 27, DT_FINI_ARRAYSZ = 28,
+       DT_RELRSZ = 35, DT_RELR = 36, DT_GNU_HASH = 0x6FFFFEF5 };
 enum { R_ABS64 = 257, R_GLOB_DAT = 1025, R_JUMP_SLOT = 1026, R_RELATIVE = 1027 };
 
 typedef struct { uint32_t name; uint8_t info, other; uint16_t shndx; uint64_t value, size; } Elf64Sym;
 typedef struct { uint64_t off, info; int64_t addend; } Elf64Rela;
+
+#define MAX_DYNSYM_COUNT 1000000ull
+
+static bool module_contains(Module *m, uint64_t offset, uint64_t length) {
+    return offset <= m->size && length <= m->size - offset;
+}
+
+// Adapted from the MIT-licensed SavageWindRecomp loader's DT_GNU_HASH handling.
+// Additional bounds checks prevent malformed hash chains from escaping the mapped NSO image.
+static uint64_t gnu_hash_nsyms(Module *m, uint64_t hash) {
+    if (hash < m->base) FATAL("%s: GNU hash table precedes its module\\n", m->name);
+    uint64_t h = hash - m->base;
+    if (!module_contains(m, h, 16)) FATAL("%s: truncated GNU hash header\\n", m->name);
+    uint32_t nbuckets = *(uint32_t *)(m->base + h);
+    uint32_t symoffset = *(uint32_t *)(m->base + h + 4);
+    uint32_t bloom_size = *(uint32_t *)(m->base + h + 8);
+    if (!nbuckets || nbuckets > MAX_DYNSYM_COUNT || symoffset > MAX_DYNSYM_COUNT ||
+        bloom_size > MAX_DYNSYM_COUNT)
+        FATAL("%s: unreasonable GNU hash dimensions\\n", m->name);
+    uint64_t bloom_bytes = (uint64_t)bloom_size * 8;
+    if (!module_contains(m, h + 16, bloom_bytes))
+        FATAL("%s: GNU hash bloom filter is outside the module\\n", m->name);
+    uint64_t buckets = h + 16 + bloom_bytes;
+    uint64_t bucket_bytes = (uint64_t)nbuckets * 4;
+    if (!module_contains(m, buckets, bucket_bytes))
+        FATAL("%s: GNU hash buckets are outside the module\\n", m->name);
+    uint64_t chain = buckets + bucket_bytes;
+    uint32_t last = 0;
+    for (uint32_t i = 0; i < nbuckets; i++) {
+        uint32_t value = *(uint32_t *)(m->base + buckets + (uint64_t)i * 4);
+        if (value && value < symoffset) FATAL("%s: invalid GNU hash bucket index\\n", m->name);
+        if (value > last) last = value;
+    }
+    if (last < symoffset) return symoffset;
+    for (uint64_t index = last; index < MAX_DYNSYM_COUNT; index++) {
+        uint64_t chain_off = chain + (index - symoffset) * 4;
+        if (!module_contains(m, chain_off, 4))
+            FATAL("%s: GNU hash chain has no terminating entry\\n", m->name);
+        uint32_t value = *(uint32_t *)(m->base + chain_off);
+        if (value & 1) return index + 1;
+    }
+    FATAL("%s: GNU hash chain exceeds the symbol limit\\n", m->name);
+}
+
+// DT_RELR packs relative relocations: even entries name one target; odd entries are
+// bitmaps for the next 63 pointer-sized targets. The addend is already stored at each target.
+static uint64_t relocate_relr(Module *m, uint64_t table, uint64_t size) {
+    if (table < m->base || size % 8) FATAL("%s: invalid DT_RELR table\\n", m->name);
+    uint64_t table_off = table - m->base;
+    if (!module_contains(m, table_off, size)) FATAL("%s: DT_RELR table is outside the module\\n", m->name);
+    uint64_t cursor = 0, count = 0;
+    bool cursor_valid = false;
+    for (uint64_t i = 0; i < size / 8; i++) {
+        uint64_t entry = ((uint64_t *)(m->base + table_off))[i];
+        if (!(entry & 1)) {
+            if ((entry & 7) || !module_contains(m, entry, 8))
+                FATAL("%s: DT_RELR target is outside the module or unaligned\\n", m->name);
+            *(uint64_t *)(m->base + entry) += m->base;
+            if (entry > UINT64_MAX - 8) FATAL("%s: DT_RELR cursor overflow\\n", m->name);
+            cursor = entry + 8;
+            cursor_valid = true;
+            count++;
+        } else {
+            if (!cursor_valid) FATAL("%s: DT_RELR bitmap precedes an address\\n", m->name);
+            for (int bit = 0; bit < 63; bit++) {
+                if (!((entry >> (bit + 1)) & 1)) continue;
+                uint64_t delta = (uint64_t)bit * 8;
+                if (cursor > m->size || delta > m->size - cursor ||
+                    !module_contains(m, cursor + delta, 8))
+                    FATAL("%s: DT_RELR bitmap target is outside the module\\n", m->name);
+                *(uint64_t *)(m->base + cursor + delta) += m->base;
+                count++;
+            }
+            if (cursor > UINT64_MAX - 63 * 8) FATAL("%s: DT_RELR cursor overflow\\n", m->name);
+            cursor += 63 * 8;
+        }
+    }
+    return count;
+}
 
 static size_t lz4_decompress(const uint8_t *src, size_t srclen, uint8_t *dst, size_t dstlen) {
     const uint8_t *s = src, *se = src + srclen;
@@ -93,11 +173,13 @@ static void load_nso(Module *m, const char *path, uint64_t base) {
     uint32_t mod0 = *(uint32_t *)(base + 4);
     uint64_t mod = base + mod0;
     m->dynamic = mod + *(int32_t *)(mod + 4);
+    uint64_t gnu_hash = 0;
     for (uint64_t *d = (uint64_t *)m->dynamic; d[0] != DT_NULL; d += 2) {
         switch (d[0]) {
         case DT_SYMTAB: m->symtab = base + d[1]; break;
         case DT_STRTAB: m->strtab = base + d[1]; break;
         case DT_HASH: m->nsyms = *(uint32_t *)(base + d[1] + 4); break;
+        case DT_GNU_HASH: gnu_hash = base + d[1]; break;
         case 12: m->init = base + d[1]; break;  // DT_INIT
         case 13: m->fini = base + d[1]; break;  // DT_FINI
         case DT_INIT_ARRAY: m->init_array = base + d[1]; break;
@@ -106,6 +188,7 @@ static void load_nso(Module *m, const char *path, uint64_t base) {
         case DT_FINI_ARRAYSZ: m->fini_array_sz = d[1]; break;
         }
     }
+    if (!m->nsyms && gnu_hash) m->nsyms = gnu_hash_nsyms(m, gnu_hash);
     LOG("loaded %-5s at %llx size %llx syms %llu\n", m->name, base, size, m->nsyms);
 }
 
@@ -164,13 +247,16 @@ static uint64_t resolve(Module *m, uint32_t symidx) {
 }
 
 static void relocate(Module *m) {
-    uint64_t rela = 0, relasz = 0, jmprel = 0, pltsz = 0;
+    uint64_t rela = 0, relasz = 0, jmprel = 0, pltsz = 0, relr = 0, relrsz = 0;
     for (uint64_t *d = (uint64_t *)m->dynamic; d[0] != DT_NULL; d += 2) {
         if (d[0] == DT_RELA) rela = m->base + d[1];
         if (d[0] == DT_RELASZ) relasz = d[1];
         if (d[0] == DT_JMPREL) jmprel = m->base + d[1];
         if (d[0] == DT_PLTRELSZ) pltsz = d[1];
+        if (d[0] == DT_RELR) relr = m->base + d[1];
+        if (d[0] == DT_RELRSZ) relrsz = d[1];
     }
+    uint64_t packed_relative = relr ? relocate_relr(m, relr, relrsz) : 0;
     int unresolved = 0;
     for (int pass = 0; pass < 2; pass++) {
         Elf64Rela *r = (Elf64Rela *)(pass ? jmprel : rela);
@@ -192,7 +278,7 @@ static void relocate(Module *m) {
             }
         }
     }
-    LOG("relocated %-5s (%d imports bound to host stubs)\n", m->name, unresolved);
+    LOG("relocated %-5s (%llu packed relative, %d imports bound to host stubs)\n", m->name, (unsigned long long)packed_relative, unresolved);
 }
 
 void loader_load(const char *exefs) {
@@ -203,6 +289,7 @@ void loader_load(const char *exefs) {
     const struct { const char *name; uint64_t base; } mods[] = {{"main", MAIN_BASE}, {"sdk", SDK_BASE}};  // (not static: Android's bases move)
     for (unsigned i = 0; i < 2; i++) {
         Module *m = &g_modules[g_nmodules++];
+        memset(m, 0, sizeof *m);
         m->name = mods[i].name;
         snprintf(path, sizeof path, "%s/%s", exefs, m->name);
         load_nso(m, path, mods[i].base);
