@@ -27,6 +27,7 @@ extern uint64_t g_guest_lo;
 #define GUEST_HI     (GUEST_LO + 0x320000000ull)
 #define MAIN_BASE    (GUEST_LO + 0x0000000000ull)
 #define SDK_BASE     (GUEST_LO + 0x0004000000ull)
+#define SUBSDK0_BASE (GUEST_LO + 0x0000000010000000ull)
 #define HLE_BASE     (GUEST_LO + 0x0080000000ull)
 #define HLE_SIZE     0x0000100000ull
 #define TLS_BASE     (GUEST_LO + 0x0090000000ull)
@@ -42,6 +43,7 @@ extern uint64_t g_guest_lo;
 #define GUEST_HI     0x7320000000ull
 #define MAIN_BASE    0x7000000000ull
 #define SDK_BASE     0x7004000000ull
+#define SUBSDK0_BASE 0x7010000000ull
 #define HLE_BASE     0x7080000000ull   // fake addresses for host-implemented functions
 #define HLE_SIZE     0x0000100000ull
 #define TLS_BASE     0x7090000000ull

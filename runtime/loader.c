@@ -208,17 +208,27 @@ void loader_load(const char *exefs) {
         load_nso(m, path, mods[i].base);
     }
 #ifdef CLUSTERTRUCK_GENERIC_TITLE
-    // This loader currently links only main + sdk. Report optional Unity / middleware modules instead of silently
-    // implying that they were included in the recompiled game library.
+    // Clustertruck's Unity/middleware code lives in subsdk0. Map it before relocations so its exports
+    // can satisfy imports in main and sdk. It remains optional for extracted revisions without that module.
+    snprintf(path, sizeof path, "%s/subsdk0", exefs);
+    struct stat sub_st;
+    if (stat(path, &sub_st) == 0 && S_ISREG(sub_st.st_mode)) {
+        Module *m = &g_modules[g_nmodules++];
+        m->name = "subsdk0";
+        load_nso(m, path, SUBSDK0_BASE);
+    } else {
+        LOG("[loader] optional module subsdk0 is absent\n");
+    }
+    // Other subsdk modules are not mapped by this first generic multi-module step.
     DIR *dir = opendir(exefs);
     if (dir) {
         struct dirent *entry;
         while ((entry = readdir(dir))) {
-            if (strncmp(entry->d_name, "subsdk", 6)) continue;
+            if (strncmp(entry->d_name, "subsdk", 6) || !strcmp(entry->d_name, "subsdk0")) continue;
             snprintf(path, sizeof path, "%s/%s", exefs, entry->d_name);
             struct stat st;
             if (stat(path, &st) == 0 && S_ISREG(st.st_mode))
-                LOG("[loader] EXTRA MODULE NOT LOADED: %s (current Clustertruck loader supports main + sdk only)\n", entry->d_name);
+                LOG("[loader] EXTRA MODULE NOT LOADED: %s (only main, sdk and subsdk0 are currently mapped)\n", entry->d_name);
         }
         closedir(dir);
     }
