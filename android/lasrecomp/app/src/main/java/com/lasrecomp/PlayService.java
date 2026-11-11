@@ -17,7 +17,7 @@ import android.util.Log;
 // the start screen. As a foreground service the process stays "perceptible" and the game waits paused where it was
 // (runtime/nvn/vulkan/device.c: nothing runs in the background). Started by the Clustertruck activity whenever it's in front
 // (only a visible app may start one), ended with it. Nothing runs in here: it only keeps the process alive.
-// From Nycolazs's LASRecomp-Android-Plus (MIT).
+// Foreground-session handling adapted from an MIT-licensed Android SDL recompilation project.
 public class PlayService extends Service {
     private static final String CHANNEL = "play";
     private static final int ID = 4201;
@@ -58,7 +58,7 @@ public class PlayService extends Service {
             if (Build.VERSION.SDK_INT >= 34) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
             else startForeground(ID, n);
         } catch (Exception e) {
-            Log.w("LASRecomp", "play service foreground: " + e);
+            Log.w("ClustertruckRecomp", "play service foreground: " + e);
             stopSelf();
         }
         return START_NOT_STICKY;  // (the game lives in the app's process: nothing to restart without it)
