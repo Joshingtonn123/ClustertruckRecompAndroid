@@ -94,6 +94,8 @@ class Nso:
                     if entry & 7 or entry + 8 > len(self.image):
                         raise ValueError("DT_RELR contains an unaligned or out-of-range target")
                     self.packed_relative_relocations.append(entry)
+                    if len(self.packed_relative_relocations) > 1_000_000:
+                        raise ValueError("DT_RELR target count exceeds the safety limit")
                     cursor = entry + 8
                 else:
                     if cursor is None:

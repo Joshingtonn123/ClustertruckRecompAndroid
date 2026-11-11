@@ -69,6 +69,7 @@ static uint64_t gnu_hash_nsyms(Module *m, uint64_t hash) {
 // bitmaps for the next 63 pointer-sized targets. The addend is already stored at each target.
 static uint64_t relocate_relr(Module *m, uint64_t table, uint64_t size) {
     if (table < m->base || size % 8) FATAL("%s: invalid DT_RELR table\n", m->name);
+    if (size / 8 > MAX_DYNSYM_COUNT) FATAL("%s: DT_RELR table exceeds the entry limit\n", m->name);
     uint64_t table_off = table - m->base;
     if (!module_contains(m, table_off, size)) FATAL("%s: DT_RELR table is outside the module\n", m->name);
     uint64_t cursor = 0, count = 0;
@@ -83,6 +84,7 @@ static uint64_t relocate_relr(Module *m, uint64_t table, uint64_t size) {
             cursor = entry + 8;
             cursor_valid = true;
             count++;
+            if (count > MAX_DYNSYM_COUNT) FATAL("%s: DT_RELR target count exceeds the limit\n", m->name);
         } else {
             if (!cursor_valid) FATAL("%s: DT_RELR bitmap precedes an address\n", m->name);
             for (int bit = 0; bit < 63; bit++) {
@@ -93,6 +95,7 @@ static uint64_t relocate_relr(Module *m, uint64_t table, uint64_t size) {
                     FATAL("%s: DT_RELR bitmap target is outside the module\n", m->name);
                 *(uint64_t *)(m->base + cursor + delta) += m->base;
                 count++;
+                if (count > MAX_DYNSYM_COUNT) FATAL("%s: DT_RELR target count exceeds the limit\n", m->name);
             }
             if (cursor > UINT64_MAX - 63 * 8) FATAL("%s: DT_RELR cursor overflow\n", m->name);
             cursor += 63 * 8;
