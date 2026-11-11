@@ -324,7 +324,7 @@ public class LASRecompActivity extends SDLActivity {
                 .putString(PREF_PENDING_PACKAGE_IMPORT, format).apply();
             startActivity(launch);
         } catch (Exception e) {
-            getSharedPreferences("lasrecomp", MODE_PRIVATE).edit()
+            getSharedPreferences("clustertruck", MODE_PRIVATE).edit()
                 .remove(PREF_PENDING_PACKAGE_IMPORT).apply();
             new AlertDialog.Builder(this)
                 .setTitle("NxDump not found")
@@ -337,7 +337,7 @@ public class LASRecompActivity extends SDLActivity {
     }
 
     private void continuePendingPackageImport() {
-        android.content.SharedPreferences prefs = getSharedPreferences("lasrecomp", MODE_PRIVATE);
+        android.content.SharedPreferences prefs = getSharedPreferences("clustertruck", MODE_PRIVATE);
         String format = prefs.getString(PREF_PENDING_PACKAGE_IMPORT, null);
         if (format == null) return;
         prefs.edit().remove(PREF_PENDING_PACKAGE_IMPORT).apply();
@@ -489,7 +489,7 @@ public class LASRecompActivity extends SDLActivity {
                      OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
                     SaveTransfer.copy(in, out, SaveTransfer.MAX_BYTES + (1 << 20));
                 }
-                nativeSaveTransferDone("Saves exported. Extract the ZIP into Link's Awakening's save folder in Eden, Yuzu or Ryujinx.");
+                nativeSaveTransferDone("Saves exported. Extract the ZIP into the Clustertruck save location after save support is implemented.");
             } else {
                 stage = java.nio.file.Files.createTempDirectory(target.getParentFile().toPath(), ".save-import-").toFile();
                 if (request == REQ_SAVE_ZIP) {
@@ -526,8 +526,8 @@ public class LASRecompActivity extends SDLActivity {
     }
 
     // ---- the log file (Saves & files > Driver compatibility, runtime/platform/android.c) goes to a folder the player
-    // picks (Android keeps Android/data/ out of reach of file managers): lasrecomp-log.txt, the run before's kept as
-    // lasrecomp-log-previous.txt, both openable on the phone and sendable with a bug report
+    // picks (Android keeps Android/data/ out of reach of file managers): clustertruck-log.txt, the run before's kept as
+    // clustertruck-log-previous.txt, both openable on the phone and sendable with a bug report
     private static final String LOG_NAME = "clustertruck-log.txt", LOG_PREVIOUS = "clustertruck-log-previous.txt";
 
     public static void pickLogFolder() {
@@ -542,7 +542,7 @@ public class LASRecompActivity extends SDLActivity {
     }
 
     private static Uri logTree() {  // the picked folder while the app may still write there (and it's still there)
-        String s = self.getSharedPreferences("lasrecomp", MODE_PRIVATE).getString("logTree", null);
+        String s = self.getSharedPreferences("clustertruck", MODE_PRIVATE).getString("logTree", null);
         if (s == null) return null;
         Uri tree = Uri.parse(s);
         boolean allowed = false;
@@ -562,7 +562,7 @@ public class LASRecompActivity extends SDLActivity {
     public static String logFolderName() {
         Uri tree = logTree();
         if (tree == null) return "";
-        String id = DocumentsContract.getTreeDocumentId(tree);  // e.g. "primary:Download/LASRecomp"
+        String id = DocumentsContract.getTreeDocumentId(tree);  // e.g. "primary:Download/Clustertruck"
         int colon = id.indexOf(':');
         String path = colon >= 0 ? id.substring(colon + 1) : id;
         return path.isEmpty() ? "/" : path;
@@ -767,7 +767,7 @@ public class LASRecompActivity extends SDLActivity {
                 try {
                     getContentResolver().takePersistableUriPermission(tree,
                         Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                    getSharedPreferences("lasrecomp", MODE_PRIVATE).edit().putString("logTree", tree.toString()).apply();
+                    getSharedPreferences("clustertruck", MODE_PRIVATE).edit().putString("logTree", tree.toString()).apply();
                 } catch (Exception e) {
                     Log.e(TAG, "log folder permission", e);
                 }
