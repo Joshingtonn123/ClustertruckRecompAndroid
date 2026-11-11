@@ -51,6 +51,7 @@ def make_gnu_hash_nso():
     put64(data, 0x38, 0x402)
     put64(data, 0x40, 0)
     put64(data, 0x80, 0x300)     # one RELR target inside this module image
+    put64(data, 0x100, 0x20)     # target contains a relative pointer to text offset 0x20
 
     dynamic = [
         (1, needed),
@@ -99,6 +100,7 @@ class NsoParserTests(unittest.TestCase):
         self.assertIn("nn::TestImport", [s[0] for s in module.imports()])
         self.assertIn("_ZN2nn4init5StartEmmPFvvES2_", [s[0] for s in module.exports()])
         self.assertEqual(module.packed_relative_relocations, [0x300])
+        self.assertIn((0x300, 1027, 0, 0x20), module.relocs)
 
 
 if __name__ == "__main__":

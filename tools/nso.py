@@ -109,6 +109,11 @@ class Nso:
                     cursor += 63 * 8
 
         self.relocs = []
+        # Treat each packed relative relocation as the equivalent RELA tuple. The generator
+        # uses these entries to discover code-pointer targets (vtables/callbacks) as well as
+        # to report relocation coverage.
+        for target in self.packed_relative_relocations:
+            self.relocs.append((target, R_AARCH64_RELATIVE, 0, self.u64(target)))
         for base_tag, size_tag in ((DT_RELA, DT_RELASZ), (DT_JMPREL, DT_PLTRELSZ)):
             if base_tag in dyn:
                 b, n = dyn[base_tag], dyn[size_tag] // 24
