@@ -88,7 +88,7 @@ android {
 
 // What the Clustertruck Android build needs from the repository: the SMAA shader as a C string (as the Makefile makes
 // smaa_hlsl.inc), the prebuilt libraries, and the shipped fonts. Its launcher background and icon are Clustertruck-specific.
-// runtime/game_addresses: the game versions and their patch tables, read by the generator (tools/game_addresses.py)
+// The generator package is generic: no Zelda build-ID tables, patches, or randomizer data are shipped.
 val prepareClustertruck by tasks.registering {
     val smaa = repo.resolve("third_party/smaa/SMAA.hlsl")
     val font = repo.resolve("third_party/fonts/Baloo2/Baloo2-SemiBold.ttf")
@@ -96,8 +96,8 @@ val prepareClustertruck by tasks.registering {
     inputs.files(smaa, font, project.file("build.gradle.kts"))
     inputs.files(libs.map { deps.resolve("lib/$it") }.filter { it.exists() })
     if (deps.resolve("gen").exists()) inputs.dir(deps.resolve("gen"))  // (the game code's builder, below)
-    inputs.files(listOf("tools/gen.py", "tools/lifter.py", "tools/analyze.py", "tools/nso.py", "tools/passes.py", "tools/patches.py",
-                        "tools/simd_c.py", "tools/game_addresses.py", "tools/rando/patch_variants.json", "tools/gamelib_entry.c",
+    inputs.files(listOf("tools/gen.py", "tools/lifter.py", "tools/analyze.py", "tools/nso.py", "tools/passes.py",
+                        "tools/simd_c.py", "tools/gamelib_entry.c",
                         "runtime/cpu.h", "runtime/simd.h", "runtime/simd_fp.h", "runtime/gamelib.h",
                         "runtime/hle/hle_symbols.txt").map { repo.resolve(it) })
     outputs.dir(gen)
@@ -152,7 +152,7 @@ val prepareClustertruck by tasks.registering {
         }
     }
 }
-tasks.named("preBuild") { dependsOn(prepareLasRecomp) }
+tasks.named("preBuild") { dependsOn(prepareClustertruck) }
 tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }.configureEach {
-    dependsOn(prepareLasRecomp)
+    dependsOn(prepareClustertruck)
 }
