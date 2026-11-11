@@ -17,6 +17,7 @@ The `clustertruck-dev` branch now contains:
 - An Android generic-title import path which accepts an extracted ExeFS folder and preserves a sibling `romfs/` folder or `romfs.bin` for subsequent asset analysis. The current generic step still compiles executable code only and deliberately does not attempt to boot the result.
 - A Switch-only read-only probe for visible XCI/NSP directory metadata, NSO module headers/build IDs, and `main.npdm`.
 - The generic runtime now generates and links optional `subsdk0` code alongside `main` and `sdk`; its exports are loaded before relocations so other modules can resolve symbols from it. Other `subsdk*` modules remain unsupported.
+- The NSO loader and Android dump inspector recognize SysV and GNU dynamic symbol hash tables, and the loader handles packed `DT_RELR` relative relocations. These format-handling ideas are adapted from the MIT-licensed [SavageWindRecomp](https://github.com/Revivedx/SavageWindRecomp) loader, with extra module bounds checks and synthetic tests.
 - The Android dump probe inventories an extracted `romfs/` tree (file count, total bytes, extensions and a small signature sample) without unpacking or copying its assets. Its NSO inspector reads segment ranges in file-offset order, skipping large alignment/padding gaps while keeping per-segment and decompressed-image safety limits.
 - CI tests and a separate Clustertruck dump-probe diagnostic app build. The LAS-based full-app packaging job is intentionally excluded from this Clustertruck workflow.
 

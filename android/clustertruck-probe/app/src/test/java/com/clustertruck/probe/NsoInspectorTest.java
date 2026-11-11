@@ -1,5 +1,6 @@
 package com.clustertruck.probe;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -63,6 +64,23 @@ public final class NsoInspectorTest {
     }
 
     @Test
+    public void parsesGnuHashWithoutSysvHashAndCountsPackedRelrTargets() throws Exception {
+        byte[] raw = makeNso(true, true);
+        NsoInspector.ModuleReport report = NsoInspector.inspectDetailed(
+                new ByteArrayInputStream(raw), "exefs/main", raw.length);
+
+        assertNotNull(report);
+        assertTrue(report.metadataParsed);
+        assertEquals("GNU", report.symbolHashStyle);
+        assertTrue(report.imports.contains("nn::TestImport"));
+        assertTrue(report.exports.contains(START));
+        assertEquals(1L, report.packedRelativeRelocationCount);
+        assertTrue(report.text, report.text.contains("GNU hash"));
+        assertTrue(report.text, report.text.contains("DT_RELR): 1 targets"));
+        assertTrue(NsoInspector.supportsPackedRelativeRelocations());
+    }
+
+    @Test
     public void recognizesTheFourRelocationTypesImplementedByCurrentLoader() {
         assertTrue(NsoInspector.supportsRuntimeRelocation(0x101));
         assertTrue(NsoInspector.supportsRuntimeRelocation(0x401));
@@ -96,7 +114,9 @@ public final class NsoInspectorTest {
                 | ((data[offset + 2] & 0xffL) << 16) | ((data[offset + 3] & 0xffL) << 24);
     }
 
-    private static byte[] makeNso() throws Exception {
+    private static byte[] makeNso() throws Exception { return makeNso(false, false); }
+
+    private static byte[] makeNso(boolean useGnuHash, boolean useRelr) throws Exception {
         byte[] text = new byte[0x100];
         byte[] rodata = new byte[0x100];
         byte[] data = new byte[0x200];
@@ -109,8 +129,19 @@ public final class NsoInspectorTest {
         int needed = 1;
         int startupName = 1 + "libnn_sdk.so".length() + 1;
         int importName = startupName + START.length() + 1;
-        put32(rodata, 0x10, 1);              // DT_HASH: nbucket
-        put32(rodata, 0x14, 3);              // DT_HASH: nchain (symbol count)
+        if (useGnuHash) {
+            put32(rodata, 0x10, 1);          // GNU hash: nbuckets
+            put32(rodata, 0x14, 1);          // GNU hash: symoffset
+            put32(rodata, 0x18, 1);          // GNU hash: bloom_size
+            put32(rodata, 0x1c, 0);          // GNU hash: bloom_shift
+            put64(rodata, 0x20, 0);          // bloom word
+            put32(rodata, 0x28, 1);          // bucket -> symbol 1
+            put32(rodata, 0x2c, 0);          // symbol 1 chain continues
+            put32(rodata, 0x30, 1);          // symbol 2 chain terminates
+        } else {
+            put32(rodata, 0x10, 1);          // DT_HASH: nbucket
+            put32(rodata, 0x14, 3);          // DT_HASH: nchain
+        }
         putString(rodata, 0x40, strings);
 
         // Three ELF64 dynamic symbols: null, one undefined import, one defined startup export.
@@ -126,9 +157,21 @@ public final class NsoInspectorTest {
         put64(data, 0x38, 0x402);
         put64(data, 0x40, 0);
 
-        long[][] dynamic = {
+        long hashTag = useGnuHash ? 0x6ffffef5L : 4;
+        long[][] dynamic = useRelr ? new long[][] {
                 {1, needed},          // DT_NEEDED
-                {4, 0x110},           // DT_HASH
+                {hashTag, 0x110},     // DT_HASH or DT_GNU_HASH
+                {5, 0x140},           // DT_STRTAB
+                {6, 0x180},           // DT_SYMTAB
+                {7, 0x230},           // DT_RELA
+                {8, 24},              // DT_RELASZ
+                {10, strings.length}, // DT_STRSZ
+                {36, 0x280},          // DT_RELR
+                {35, 8},              // DT_RELRSZ
+                {0, 0}                // DT_NULL
+        } : new long[][] {
+                {1, needed},          // DT_NEEDED
+                {hashTag, 0x110},     // DT_HASH or DT_GNU_HASH
                 {5, 0x140},           // DT_STRTAB
                 {6, 0x180},           // DT_SYMTAB
                 {7, 0x230},           // DT_RELA
@@ -136,6 +179,7 @@ public final class NsoInspectorTest {
                 {10, strings.length}, // DT_STRSZ
                 {0, 0}                // DT_NULL
         };
+        if (useRelr) put64(data, 0x80, 0x300);  // RELR target in module image
         for (int i = 0; i < dynamic.length; i++) {
             put64(text, 0x60 + i * 16, dynamic[i][0]);
             put64(text, 0x68 + i * 16, dynamic[i][1]);

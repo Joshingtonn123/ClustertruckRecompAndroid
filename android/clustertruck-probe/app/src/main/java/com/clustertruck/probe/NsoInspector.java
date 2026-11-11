@@ -37,6 +37,8 @@ final class NsoInspector {
         final LinkedHashSet<String> exports = new LinkedHashSet<>();
         final LinkedHashSet<String> neededLibraries = new LinkedHashSet<>();
         final Map<Integer, Integer> relocationTypes = new TreeMap<>();
+        String symbolHashStyle = "unavailable";
+        long packedRelativeRelocationCount;
 
         ModuleReport(String path) { this.path = path; }
 
@@ -100,8 +102,8 @@ final class NsoInspector {
         long dynamic = mod0 + s32(image, (int) mod0 + 4);
         requireRange(image.length, dynamic, 16, "dynamic table");
 
-        long strtab = -1, symtab = -1, hash = -1, strsz = -1;
-        long rela = -1, relasz = 0, jmprel = -1, pltrelsz = 0;
+        long strtab = -1, symtab = -1, hash = -1, gnuHash = -1, strsz = -1;
+        long rela = -1, relasz = 0, jmprel = -1, pltrelsz = 0, relr = -1, relrsz = 0;
         List<Long> neededOffsets = new ArrayList<>();
         boolean terminated = false;
         for (int i = 0; i < MAX_DYNAMIC_ENTRIES; i++) {
@@ -120,6 +122,9 @@ final class NsoInspector {
                 case 8: relasz = value; break;                // DT_RELASZ
                 case 10: strsz = value; break;                // DT_STRSZ
                 case 23: jmprel = value; break;               // DT_JMPREL
+                case 35: relrsz = value; break;               // DT_RELRSZ
+                case 36: relr = value; break;                 // DT_RELR
+                case 0x6ffffef5: gnuHash = value; break;       // DT_GNU_HASH
                 default: break;
             }
         }
@@ -141,9 +146,16 @@ final class NsoInspector {
         int imports = 0, exports = 0;
         boolean startupExportFound = false;
         LinkedHashSet<String> importNames = new LinkedHashSet<>();
-        if (hash >= 0 && symtab >= 0) {
+        long symbolCount = -1;
+        if (symtab >= 0 && hash >= 0) {
             requireRange(image.length, hash, 8, "ELF hash table");
-            long symbolCount = u32(image, (int) hash + 4);
+            symbolCount = u32(image, (int) hash + 4);
+            report.symbolHashStyle = "SysV";
+        } else if (symtab >= 0 && gnuHash >= 0) {
+            symbolCount = gnuHashSymbolCount(image, gnuHash);
+            report.symbolHashStyle = "GNU";
+        }
+        if (symbolCount >= 0) {
             if (symbolCount > MAX_SYMBOLS) throw new IOException("symbol table exceeds the scan limit");
             requireRange(image.length, symtab, symbolCount * 24L, "dynamic symbol table");
             for (int i = 0; i < (int) symbolCount; i++) {
@@ -191,11 +203,20 @@ final class NsoInspector {
             }
         }
 
+        if (relr >= 0) report.packedRelativeRelocationCount = countRelrTargets(image, relr, relrsz);
+
         report.metadataParsed = true;
         StringBuilder out = new StringBuilder("    Dynamic metadata: ")
                 .append(imports).append(" imports, ").append(exports).append(" exports, ")
-                .append(relocationCount).append(" relocations; nn::init::Start export: ")
-                .append(startupExportFound ? "PRESENT" : "not found in this module");
+                .append(relocationCount).append(" RELA relocations; nn::init::Start export: ")
+                .append(startupExportFound ? "PRESENT" : "not found in this module")
+                .append("\n    Symbol hash table: ").append(report.symbolHashStyle);
+        if (relr >= 0) {
+            out.append("\n    Packed relative relocations (DT_RELR): ")
+                    .append(report.packedRelativeRelocationCount)
+                    .append(" targets; Android loader support: ")
+                    .append(supportsPackedRelativeRelocations() ? "implemented" : "not implemented");
+        }
         if (!libraries.isEmpty()) {
             out.append("\n    Needed libraries: ");
             appendJoined(out, libraries);
@@ -221,6 +242,62 @@ final class NsoInspector {
         }
         return out.toString();
     }
+
+    private static long gnuHashSymbolCount(byte[] image, long hash) throws IOException {
+        requireRange(image.length, hash, 16, "GNU hash header");
+        long bucketCount = u32(image, (int) hash);
+        long symbolOffset = u32(image, (int) hash + 4);
+        long bloomCount = u32(image, (int) hash + 8);
+        if (bucketCount == 0 || bucketCount > MAX_SYMBOLS ||
+                symbolOffset > MAX_SYMBOLS || bloomCount > MAX_SYMBOLS)
+            throw new IOException("GNU hash dimensions exceed the scan limit");
+        long buckets = hash + 16 + bloomCount * 8;
+        requireRange(image.length, buckets, bucketCount * 4, "GNU hash buckets");
+        long chain = buckets + bucketCount * 4;
+        long last = 0;
+        for (int i = 0; i < (int) bucketCount; i++) {
+            long value = u32(image, (int) buckets + i * 4);
+            if (value != 0 && value < symbolOffset)
+                throw new IOException("GNU hash bucket points before the symbol offset");
+            if (value > last) last = value;
+        }
+        if (last < symbolOffset) return symbolOffset;
+        for (long symbol = last; symbol < MAX_SYMBOLS; symbol++) {
+            long chainEntry = chain + (symbol - symbolOffset) * 4;
+            requireRange(image.length, chainEntry, 4, "GNU hash chain");
+            if ((u32(image, (int) chainEntry) & 1) != 0) return symbol + 1;
+        }
+        throw new IOException("GNU hash chain exceeds the scan limit");
+    }
+
+    private static long countRelrTargets(byte[] image, long relr, long relrSize) throws IOException {
+        if ((relrSize & 7) != 0) throw new IOException("DT_RELR size is not pointer-aligned");
+        requireRange(image.length, relr, relrSize, "DT_RELR table");
+        long cursor = -1, count = 0;
+        for (long p = relr; p < relr + relrSize; p += 8) {
+            long entry = i64(image, (int) p);
+            if ((entry & 1) == 0) {
+                if ((entry & 7) != 0) throw new IOException("DT_RELR target is unaligned");
+                requireRange(image.length, entry, 8, "DT_RELR target");
+                cursor = entry + 8;
+                count++;
+            } else {
+                if (cursor < 0) throw new IOException("DT_RELR bitmap precedes an address");
+                for (int bit = 0; bit < 63; bit++) {
+                    if (((entry >>> (bit + 1)) & 1) == 0) continue;
+                    long target = cursor + (long) bit * 8;
+                    requireRange(image.length, target, 8, "DT_RELR bitmap target");
+                    count++;
+                    if (count > MAX_RELOCATIONS) throw new IOException("DT_RELR targets exceed the scan limit");
+                }
+                cursor += 63L * 8;
+            }
+            if (count > MAX_RELOCATIONS) throw new IOException("DT_RELR targets exceed the scan limit");
+        }
+        return count;
+    }
+
+    static boolean supportsPackedRelativeRelocations() { return true; }
 
     static boolean supportsRuntimeRelocation(int type) {
         return type == 257 || type == 1025 || type == 1026 || type == 1027;
