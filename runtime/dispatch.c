@@ -12,7 +12,7 @@
 #endif
 
 typedef struct { const uint64_t *addrs; const GuestFn *fns; uint64_t count, lo, hi; } FnTable;
-static FnTable tables[2];
+static FnTable tables[3];
 
 // HLE stubs live at fake addresses HLE_BASE + 16*i
 #define MAX_HLE 4096
@@ -117,29 +117,39 @@ void *hle_alloc(uint64_t size) {
 
 void dispatch_init(void) {  // (after gamelib_load)
     const GameLibTables *g = gamelib_tables();
-    uint64_t nm = *g->main_count, ns = *g->sdk_count;
+    uint64_t counts[3] = {
+        *g->main_count, *g->sdk_count,
+        g->subsdk0_count ? *g->subsdk0_count : 0
+    };
+    const uint64_t *src[3] = {g->main_addrs, g->sdk_addrs, g->subsdk0_addrs};
+    const GuestFn *fns[3] = {g->main_fns, g->sdk_fns, g->subsdk0_fns};
 #ifdef __ANDROID__
-    // The library lists the desktop window's addresses (gen.py --dyn-base): moved to where the window is (rt.h).
-    static uint64_t *moved[2];
-    const uint64_t *src[2] = {g->main_addrs, g->sdk_addrs}, cnt[2] = {nm, ns};
-    for (int t = 0; t < 2; t++) {
+    // The library lists canonical addresses (gen.py --dyn-base); move each nonempty table to this process's guest window.
+    static uint64_t *moved[3];
+    for (int t = 0; t < 3; t++) {
         free(moved[t]);
-        moved[t] = malloc(cnt[t] * sizeof *moved[t]);
+        moved[t] = NULL;
+        if (!counts[t]) { tables[t] = (FnTable){0}; continue; }
+        if (!src[t] || !fns[t]) FATAL("game code has an incomplete function table %d\n", t);
+        moved[t] = malloc(counts[t] * sizeof *moved[t]);
         if (!moved[t]) FATAL("out of memory\n");
-        for (uint64_t i = 0; i < cnt[t]; i++) moved[t][i] = src[t][i] - GUEST_CANON + GUEST_LO;
+        for (uint64_t i = 0; i < counts[t]; i++)
+            moved[t][i] = src[t][i] - GUEST_CANON + GUEST_LO;
+        tables[t] = (FnTable){moved[t], fns[t], counts[t], moved[t][0], moved[t][counts[t] - 1]};
     }
-    tables[0] = (FnTable){moved[0], g->main_fns, nm, moved[0][0], moved[0][nm - 1]};
-    tables[1] = (FnTable){moved[1], g->sdk_fns, ns, moved[1][0], moved[1][ns - 1]};
 #else
-    tables[0] = (FnTable){g->main_addrs, g->main_fns, nm, g->main_addrs[0], g->main_addrs[nm - 1]};
-    tables[1] = (FnTable){g->sdk_addrs, g->sdk_fns, ns, g->sdk_addrs[0], g->sdk_addrs[ns - 1]};
+    for (int t = 0; t < 3; t++) {
+        if (!counts[t]) { tables[t] = (FnTable){0}; continue; }
+        if (!src[t] || !fns[t]) FATAL("game code has an incomplete function table %d\n", t);
+        tables[t] = (FnTable){src[t], fns[t], counts[t], src[t][0], src[t][counts[t] - 1]};
+    }
 #endif
 }
 
 GuestFn dispatch_lookup(uint64_t addr) {
-    for (int t = 0; t < 2; t++) {
+    for (int t = 0; t < 3; t++) {
         FnTable *ft = &tables[t];
-        if (addr < ft->lo || addr > ft->hi) continue;
+        if (!ft->count || addr < ft->lo || addr > ft->hi) continue;
         uint64_t lo = 0, hi = ft->count;
         while (lo < hi) {
             uint64_t mid = (lo + hi) / 2;

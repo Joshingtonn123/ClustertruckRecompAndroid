@@ -51,6 +51,9 @@ typedef struct {
     const uint64_t *main_addrs, *sdk_addrs;  // sorted guest addresses
     const GuestFn *main_fns, *sdk_fns;       // the functions at them
     const uint64_t *main_count, *sdk_count;
+    const uint64_t *subsdk0_addrs;
+    const GuestFn *subsdk0_fns;
+    const uint64_t *subsdk0_count;  // NULL/zero for titles without subsdk0
 } GameLibTables;
 
 // The library's one exported function (tools/gamelib_entry.c).
