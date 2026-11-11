@@ -52,6 +52,22 @@ class ClustertruckAndroidProfileTests(unittest.TestCase):
         self.assertIn("#if defined(__ANDROID__) && !defined(CLUSTERTRUCK_GENERIC_TITLE)", launcher)
         self.assertIn("Clustertruck code compiled; Unity startup, Switch services and game rendering are not integrated yet", launcher)
 
+    def test_missing_sdk_exception_stack_import_has_a_reset_safe_hle(self):
+        source = read("runtime/hle/exception.c")
+        loader = read("runtime/loader.c")
+        cmake = read("android/lasrecomp/app/src/main/cpp/CMakeLists.txt")
+        makefile = read("Makefile")
+
+        self.assertIn('HLE_FUNC("nnosGetDefaultUserExceptionStackForApplication"', source)
+        self.assertIn("hle_alloc(stack_size + 0x1000)", source)
+        self.assertIn("0x10000", source)
+        self.assertIn("allocation + 0xFFFu", source)
+        self.assertIn("RT_ON_RESET(user_exception_stack_reset)", source)
+        self.assertIn("runtime/hle/*.c", makefile)
+        self.assertIn("runtime/hle/*.c", cmake)
+        self.assertLess(loader.index("HostFn impl = hle_lookup_impl(name);"),
+                        loader.index("if ((s->info >> 4) == 2) return 0;"))
+
     def test_import_flow_is_clustertruck_scoped_and_does_not_claim_package_extraction(self):
         activity = read("android/lasrecomp/app/src/main/java/com/lasrecomp/LASRecompActivity.java")
         launcher = read("runtime/ui/launcher.mm")

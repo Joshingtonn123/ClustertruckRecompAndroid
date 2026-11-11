@@ -13,6 +13,7 @@ The current Android base is the LASRecompAndroid fork. Its Android activity, sto
 | [LASRecompAndroid](https://github.com/mamcjr/LASRecompAndroid) / [LASRecomp](https://github.com/peiikai/LASRecomp) | Existing Android app shell, ARM64 native path, NSO generator, SDL integration, Vulkan backend, Horizon-style runtime | The original game-specific address tables, HLE patches, and boot assumptions must be separated from generic code |
 | [SavageWindRecomp](https://github.com/Revivedx/SavageWindRecomp) | A more mature generic NSO loader, packed relative relocations, GNU-hash symbol counting, Horizon kernel/IPC patterns, and NVN rendering research | Its game implementation is for Breath of the Wild on Windows/Linux and its documented target uses Vulkan 1.3; it is not an Android 11/Vulkan 1.1 drop-in |
 | [smo-recomp](https://github.com/Coz-0/smo-recomp) | Clear separation of core startup, SDK, file system, input, audio and NVN/Vulkan layers; useful architecture reference | Its current target is Windows x64 and its code is GPL-3.0, so wholesale copying would impose different licensing obligations and still would not create an Android ARM64 port |
+| [P5R Android](https://github.com/Brandon04Gonzalez/p5r-android) | A current Android ARM64 Switch runtime based on Super Mario Bros. Wonder Recomp; its README documents Android 10+, Vulkan 1.1, kernel/services, NVN/Vulkan, audio, video and touch | It uses native execution and is adapted to Persona 5 Royal; its README reports one Adreno 610 test device and says Mali is untested. It is a strong Android HLE/runtime reference, not a verified Clustertruck drop-in |
 
 ## Reuse completed on clustertruck-dev
 
@@ -24,6 +25,8 @@ The MIT-licensed SavageWindRecomp loader format logic has been adapted for:
 - Generator input: convert each decoded packed relative relocation to the existing RELA-style tuple so current function-boundary and code-pointer analysis sees it.
 
 The adapted loader adds bounds and count limits. Synthetic fixtures test GNU-hash-only modules and packed relative relocations. Attribution is in THIRD_PARTY_NOTICES.md.
+
+The MIT-licensed P5R Android runtime was also checked because it targets Android ARM64 and has a wider Horizon service layer. Its exact implementation of the unmatched Clustertruck SDK import, nnosGetDefaultUserExceptionStackForApplication, is adapted into runtime/hle/exception.c. That implementation uses this project's HLE registry and guest allocator, is 4 KiB aligned, and resets its cached address on in-place reboot. No other P5R-specific game code or graphics code has been copied.
 
 ## Clustertruck-specific facts still controlling the port
 

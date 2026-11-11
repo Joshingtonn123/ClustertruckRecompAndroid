@@ -16,3 +16,19 @@ The relevant upstream code is licensed under the MIT License:
 > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 This notice applies only to the portions adapted from SavageWindRecomp. Other source files and third-party dependencies retain their own applicable notices and licenses.
+
+
+## P5R Android user-exception stack HLE
+
+This project adapts the ABI behavior of the HLE implementation for `nnosGetDefaultUserExceptionStackForApplication` from [P5R Android](https://github.com/Brandon04Gonzalez/p5r-android), file `runtime/src/loader.cpp`, by Brandon04Gonzalez. The source project builds on the Switch runtime from Super Mario Bros. Wonder Recomp by BelmanteGu. The implementation here is adapted to this repository's C HLE registration, zeroed guest-memory allocator and in-place reboot lifecycle; the stack is page-aligned and its address is reset after reboot.
+
+Copyright (c) 2026 BelmanteGu  
+Copyright (c) 2026 Brandon (the Persona 5 Royal Android port: games/p5r, runtime/src/nce and the changes for it)
+
+The source project is licensed under the MIT License:
+
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
