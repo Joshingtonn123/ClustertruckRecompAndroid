@@ -35,6 +35,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * A small Android 11+ metadata probe for a user's own Clustertruck Switch dump.
@@ -571,7 +573,11 @@ public final class MainActivity extends Activity {
         String treeId = DocumentsContract.getTreeDocumentId(treeUri);
         if (treeId == null) throw new IOException("Android did not return a folder document ID");
         FolderScan scan = new FolderScan();
-        scanChildren(treeUri, treeId, "", 0, scan);
+        String rootName = treeId.substring(treeId.lastIndexOf('/') + 1);
+        boolean rootIsRomfs = "romfs".equalsIgnoreCase(rootName);
+        scan.romfsFound = rootIsRomfs;
+        scan.exefsFound = "exefs".equalsIgnoreCase(rootName);
+        scanChildren(treeUri, treeId, "", 0, rootIsRomfs, scan);
 
         StringBuilder out = new StringBuilder();
         out.append("CLUSTERTRUCK SWITCH DUMP — EXTRACTED FOLDER REPORT\n");
@@ -585,6 +591,28 @@ public final class MainActivity extends Activity {
         } else {
             out.append("\nSwitch executable module headers:\n");
             for (String item : scan.nsoReports) out.append("  ").append(item).append('\n');
+        }
+        out.append("\nDetected ExeFS folder: ").append(scan.exefsFound ? "YES" : "NO").append('\n');
+        out.append("Detected RomFS folder: ").append(scan.romfsFound ? "YES" : "NO").append('\n');
+        if (scan.romfsFound) {
+            out.append("RomFS files counted: ").append(scan.romfsFileCount)
+                    .append(scan.truncated ? " (lower bound; scan limit reached)" : "").append('\n');
+            out.append("RomFS total size: ").append(scan.romfsBytes).append(" bytes");
+            if (scan.romfsUnknownSizeCount > 0)
+                out.append(" (").append(scan.romfsUnknownSizeCount).append(" file sizes unavailable)");
+            if (scan.romfsBytesOverflow) out.append(" (counter overflow)");
+            out.append('\n');
+            if (!scan.romfsExtensions.isEmpty())
+                out.append("RomFS file extensions: ").append(scan.romfsExtensions).append('\n');
+            if (!scan.romfsSignatures.isEmpty())
+                out.append("Recognized file signatures (first up to 32 files): ")
+                        .append(scan.romfsSignatures).append('\n');
+            if (!scan.romfsSamples.isEmpty()) {
+                out.append("RomFS path samples:\n");
+                for (String sample : scan.romfsSamples) out.append("  ").append(sample).append('\n');
+            }
+        } else {
+            out.append("No directory named romfs/ was found. Select the extracted game root if RomFS was extracted.\n");
         }
         if (scan.npdmReport != null) out.append("\nmain.npdm metadata:\n  ").append(scan.npdmReport).append('\n');
 
@@ -600,10 +628,21 @@ public final class MainActivity extends Activity {
         int nsoCount;
         boolean truncated;
         String npdmReport;
+        boolean exefsFound;
+        boolean romfsFound;
+        int romfsFileCount;
+        int romfsUnknownSizeCount;
+        int romfsSignatureReads;
+        long romfsBytes;
+        boolean romfsBytesOverflow;
+        final Map<String, Integer> romfsExtensions = new TreeMap<>();
+        final Map<String, Integer> romfsSignatures = new TreeMap<>();
+        final List<String> romfsSamples = new ArrayList<>();
         final List<String> nsoReports = new ArrayList<>();
     }
 
-    private void scanChildren(Uri treeUri, String parentId, String prefix, int depth, FolderScan scan) throws IOException {
+    private void scanChildren(Uri treeUri, String parentId, String prefix, int depth,
+                              boolean inRomfs, FolderScan scan) throws IOException {
         if (scan.truncated || depth > 8) return;
         Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId);
         String[] projection = {
@@ -634,11 +673,14 @@ public final class MainActivity extends Activity {
                 String path = prefix.isEmpty() ? name : prefix + "/" + name;
                 Uri doc = DocumentsContract.buildDocumentUriUsingTree(treeUri, id);
                 if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
-                    scanChildren(treeUri, id, path, depth + 1, scan);
+                    boolean childIsRomfs = inRomfs || "romfs".equalsIgnoreCase(name);
+                    if ("exefs".equalsIgnoreCase(name)) scan.exefsFound = true;
+                    if ("romfs".equalsIgnoreCase(name)) scan.romfsFound = true;
+                    scanChildren(treeUri, id, path, depth + 1, childIsRomfs, scan);
                     if (scan.truncated) break;
                 } else {
                     scan.filesSeen++;
-                    inspectFolderFile(doc, path, size, scan);
+                    inspectFolderFile(doc, path, size, inRomfs, scan);
                 }
             }
         } catch (SecurityException error) {
@@ -646,8 +688,36 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void inspectFolderFile(Uri uri, String path, long size, FolderScan scan) {
+    private void inspectFolderFile(Uri uri, String path, long size, boolean inRomfs, FolderScan scan) {
         String basename = path.substring(path.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+        if (inRomfs) {
+            scan.romfsFileCount++;
+            if (size >= 0) {
+                try {
+                    scan.romfsBytes = Math.addExact(scan.romfsBytes, size);
+                } catch (ArithmeticException overflow) {
+                    scan.romfsBytesOverflow = true;
+                }
+            } else {
+                scan.romfsUnknownSizeCount++;
+            }
+            int dot = basename.lastIndexOf('.');
+            String extension = dot > 0 ? basename.substring(dot) : "(no extension)";
+            scan.romfsExtensions.put(extension,
+                    scan.romfsExtensions.getOrDefault(extension, 0) + 1);
+            if (scan.romfsSamples.size() < 20) scan.romfsSamples.add(path);
+            if (scan.romfsSignatureReads < 32) {
+                scan.romfsSignatureReads++;
+                try (InputStream prefixInput = getContentResolver().openInputStream(uri)) {
+                    if (prefixInput != null) {
+                        String signature = classifyRomfsSignature(readAtMost(prefixInput, 16));
+                        if (!"other".equals(signature))
+                            scan.romfsSignatures.put(signature,
+                                    scan.romfsSignatures.getOrDefault(signature, 0) + 1);
+                    }
+                } catch (Exception ignored) { }
+            }
+        }
         boolean moduleCandidate = "main".equals(basename) || "sdk".equals(basename) ||
                 "rtld".equals(basename) || basename.startsWith("subsdk") || basename.endsWith(".nso");
 
@@ -676,6 +746,21 @@ public final class MainActivity extends Activity {
                 scan.npdmReport = path + " — SHA-256 unavailable: " + error.getMessage();
             }
         }
+    }
+
+    private static String classifyRomfsSignature(byte[] prefix) {
+        if (asciiAt(prefix, 0, 7).equals("UnityFS")) return "UnityFS";
+        if (asciiAt(prefix, 0, 8).equals("UnityRaw")) return "UnityRaw";
+        if (asciiAt(prefix, 0, 8).equals("UnityWeb")) return "UnityWeb";
+        if (asciiAt(prefix, 0, 12).equals("UnityArchive")) return "UnityArchive";
+        if (asciiAt(prefix, 0, 4).equals("OggS")) return "OggS";
+        if (asciiAt(prefix, 0, 4).equals("RIFF")) return "RIFF";
+        if (asciiAt(prefix, 0, 4).equals("NCA2") || asciiAt(prefix, 0, 4).equals("NCA3")) return "NCA";
+        if (asciiAt(prefix, 0, 4).equals("NSO0")) return "NSO0";
+        if (prefix.length >= 4 && prefix[0] == 'P' && prefix[1] == 'K' &&
+                prefix[2] == 3 && prefix[3] == 4) return "ZIP";
+        if (asciiAt(prefix, 0, 4).equals("fLaC")) return "FLAC";
+        return "other";
     }
 
     private static String describeNsoHeader(byte[] header, String path) {

@@ -18,7 +18,9 @@ import java.util.Locale;
  */
 final class NsoInspector {
     private static final int HEADER_SIZE = 0x80;
-    private static final int MAX_RAW_BYTES = 64 * 1024 * 1024;
+    // Segments are read one at a time; large alignment gaps are skipped, not buffered.
+    private static final long MAX_FILE_RANGE_BYTES = 512L * 1024 * 1024;
+    private static final int MAX_SEGMENT_STORED_BYTES = 64 * 1024 * 1024;
     private static final int MAX_IMAGE_BYTES = 128 * 1024 * 1024;
     private static final int MAX_DYNAMIC_ENTRIES = 8192;
     private static final int MAX_SYMBOLS = 200_000;
@@ -32,12 +34,12 @@ final class NsoInspector {
         if (header.length < HEADER_SIZE || !asciiAt(header, 0, "NSO0")) return null;
         String summary = headerSummary(header, path);
 
-        byte[] raw = readModule(input, header, reportedSize);
-        if (raw == null) {
-            return summary + "\n    Dynamic metadata: skipped (required NSO segment data exceeds the 64 MiB safety limit or the file size is inconsistent)";
+        byte[] image = readModuleImage(input, header, reportedSize);
+        if (image == null) {
+            return summary + "\n    Dynamic metadata: skipped (NSO segment offsets/sizes exceed the bounded scan limits or the reported file size is inconsistent)";
         }
         try {
-            return summary + "\n" + dynamicSummary(raw);
+            return summary + "\n" + dynamicSummary(image);
         } catch (Exception error) {
             String message = error.getMessage();
             if (message == null || message.isEmpty()) message = error.getClass().getSimpleName();
@@ -66,40 +68,7 @@ final class NsoInspector {
         return out.toString();
     }
 
-    private static String dynamicSummary(byte[] raw) throws IOException {
-        long flags = u32(raw, 0x0c);
-        long[] fileOff = new long[3], memOff = new long[3], decSize = new long[3], compSize = new long[3];
-        long imageEnd = 0;
-        for (int i = 0; i < 3; i++) {
-            int p = 0x10 + i * 0x10;
-            fileOff[i] = u32(raw, p);
-            memOff[i] = u32(raw, p + 4);
-            decSize[i] = u32(raw, p + 8);
-            compSize[i] = u32(raw, 0x60 + i * 4);
-            requireRange(raw.length, fileOff[i], compSize[i], "NSO segment data");
-            if (memOff[i] + decSize[i] > MAX_IMAGE_BYTES)
-                throw new IOException("decompressed image exceeds the 192 MiB safety limit");
-            imageEnd = Math.max(imageEnd, memOff[i] + decSize[i]);
-        }
-        long bss = u32(raw, 0x3c);
-        imageEnd = Math.max(imageEnd, memOff[2] + decSize[2] + bss);
-        imageEnd = (imageEnd + 0xfffL) & ~0xfffL;
-        if (imageEnd <= 0 || imageEnd > MAX_IMAGE_BYTES)
-            throw new IOException("decompressed image exceeds the 192 MiB safety limit");
-
-        byte[] image = new byte[(int) imageEnd];
-        for (int i = 0; i < 3; i++) {
-            int source = (int) fileOff[i];
-            int stored = (int) compSize[i];
-            int expected = (int) decSize[i];
-            if ((flags & (1L << i)) != 0) {
-                lz4Block(raw, source, stored, image, (int) memOff[i], expected);
-            } else {
-                if (stored < expected) throw new IOException("uncompressed NSO segment is truncated");
-                System.arraycopy(raw, source, image, (int) memOff[i], expected);
-            }
-        }
-
+    private static String dynamicSummary(byte[] image) throws IOException {
         long mod0 = u32(image, 4);
         requireRange(image.length, mod0, 8, "MOD0 header");
         if (!asciiAt(image, (int) mod0, "MOD0")) throw new IOException("MOD0 signature not found");
@@ -269,31 +238,93 @@ final class NsoInspector {
             throw new IOException("LZ4 segment length mismatch (" + out + " != " + outputLength + ")");
     }
 
-    private static byte[] readModule(InputStream input, byte[] header, long reportedSize) throws IOException {
-        // Some dump/extraction tools preserve large padding or container-alignment tails after the NSO's
-        // compressed segments. Read only the bytes referenced by the NSO header; the unused tail is not
-        // part of the module image and must not make a valid main executable exceed the safety limit.
-        long needed = HEADER_SIZE;
-        for (int i = 0; i < 3; i++) {
-            long fileOffset = u32(header, 0x10 + i * 0x10);
-            long storedSize = u32(header, 0x60 + i * 4);
-            if (fileOffset < HEADER_SIZE || fileOffset > MAX_RAW_BYTES ||
-                    storedSize > MAX_RAW_BYTES - fileOffset) return null;
-            needed = Math.max(needed, fileOffset + storedSize);
-        }
-        if (needed > MAX_RAW_BYTES || (reportedSize > 0 &&
-                (reportedSize < HEADER_SIZE || reportedSize < needed))) return null;
+    private static byte[] readModuleImage(InputStream input, byte[] header, long reportedSize) throws IOException {
+        long flags = u32(header, 0x0c);
+        long[] fileOffsets = new long[3];
+        long[] memoryOffsets = new long[3];
+        long[] decompressedSizes = new long[3];
+        long[] storedSizes = new long[3];
+        long imageEnd = 0;
 
-        byte[] raw = new byte[(int) needed];
-        System.arraycopy(header, 0, raw, 0, header.length);
-        int offset = header.length;
-        while (offset < raw.length) {
-            int count = input.read(raw, offset, raw.length - offset);
-            if (count < 0) throw new IOException("NSO file ended before its required segment data");
+        for (int i = 0; i < 3; i++) {
+            int p = 0x10 + i * 0x10;
+            fileOffsets[i] = u32(header, p);
+            memoryOffsets[i] = u32(header, p + 4);
+            decompressedSizes[i] = u32(header, p + 8);
+            storedSizes[i] = u32(header, 0x60 + i * 4);
+            long fileEnd = fileOffsets[i] + storedSizes[i];
+            if (fileOffsets[i] < HEADER_SIZE || fileEnd < fileOffsets[i] ||
+                    fileEnd > MAX_FILE_RANGE_BYTES || storedSizes[i] > MAX_SEGMENT_STORED_BYTES ||
+                    (reportedSize > 0 && fileEnd > reportedSize)) return null;
+            if (memoryOffsets[i] > MAX_IMAGE_BYTES ||
+                    decompressedSizes[i] > MAX_IMAGE_BYTES - memoryOffsets[i]) return null;
+            imageEnd = Math.max(imageEnd, memoryOffsets[i] + decompressedSizes[i]);
+        }
+
+        long bss = u32(header, 0x3c);
+        long dataEnd = memoryOffsets[2] + decompressedSizes[2];
+        if (bss > MAX_IMAGE_BYTES - dataEnd) return null;
+        imageEnd = Math.max(imageEnd, dataEnd + bss);
+        imageEnd = (imageEnd + 0xfffL) & ~0xfffL;
+        if (imageEnd <= 0 || imageEnd > MAX_IMAGE_BYTES) return null;
+
+        byte[] image = new byte[(int) imageEnd];
+        int[] order = {0, 1, 2};
+        for (int i = 0; i < order.length; i++) {
+            for (int j = i + 1; j < order.length; j++) {
+                if (fileOffsets[order[j]] < fileOffsets[order[i]]) {
+                    int swap = order[i];
+                    order[i] = order[j];
+                    order[j] = swap;
+                }
+            }
+        }
+
+        long streamOffset = HEADER_SIZE;
+        for (int index : order) {
+            long sourceOffset = fileOffsets[index];
+            if (sourceOffset < streamOffset) throw new IOException("NSO segment file ranges overlap");
+            skipBytes(input, sourceOffset - streamOffset);
+            int stored = (int) storedSizes[index];
+            int expected = (int) decompressedSizes[index];
+            byte[] segment = new byte[stored];
+            readInto(input, segment);
+            if ((flags & (1L << index)) != 0) {
+                lz4Block(segment, 0, segment.length, image, (int) memoryOffsets[index], expected);
+            } else {
+                if (stored < expected) throw new IOException("uncompressed NSO segment is truncated");
+                System.arraycopy(segment, 0, image, (int) memoryOffsets[index], expected);
+            }
+            streamOffset = sourceOffset + storedSizes[index];
+        }
+        return image;
+    }
+
+    private static void readInto(InputStream input, byte[] output) throws IOException {
+        int offset = 0;
+        while (offset < output.length) {
+            int count = input.read(output, offset, output.length - offset);
+            if (count < 0) throw new IOException("NSO file ended before required segment data");
             if (count == 0) continue;
             offset += count;
         }
-        return raw;
+    }
+
+    private static void skipBytes(InputStream input, long count) throws IOException {
+        long remaining = count;
+        byte[] discard = new byte[8192];
+        while (remaining > 0) {
+            long skipped = input.skip(remaining);
+            if (skipped > 0) {
+                remaining -= skipped;
+                continue;
+            }
+            int wanted = (int) Math.min(discard.length, remaining);
+            int read = input.read(discard, 0, wanted);
+            if (read < 0) throw new IOException("NSO file ended inside a segment gap");
+            if (read == 0) continue;
+            remaining -= read;
+        }
     }
 
     private static byte[] readAtMost(InputStream input, int limit) throws IOException {

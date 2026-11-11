@@ -38,6 +38,31 @@ public final class NsoInspectorTest {
         assertTrue(report, report.contains("0x402 × 1"));
     }
 
+    @Test
+    public void parsesSegmentsAfterLargeFileOffsetGapWithoutBufferingPadding() throws Exception {
+        byte[] compact = makeNso();
+        int gap = 65 * 1024 * 1024;
+        long rodataOffset = u32(compact, 0x20);
+        long dataOffset = u32(compact, 0x30);
+        byte[] padded = new byte[compact.length + gap];
+        System.arraycopy(compact, 0, padded, 0, (int) rodataOffset);
+        System.arraycopy(compact, (int) rodataOffset, padded, (int) rodataOffset + gap,
+                compact.length - (int) rodataOffset);
+        put32(padded, 0x20, rodataOffset + gap);
+        put32(padded, 0x30, dataOffset + gap);
+
+        String report = NsoInspector.inspect(
+                new ByteArrayInputStream(padded), "exefs/main", padded.length);
+        assertTrue(report, report.contains("1 imports, 1 exports, 1 relocations"));
+        assertTrue(report, report.contains("nn::init::Start export: PRESENT"));
+        assertTrue(report, report.contains("Needed libraries: libnn_sdk.so"));
+    }
+
+    private static long u32(byte[] data, int offset) {
+        return (data[offset] & 0xffL) | ((data[offset + 1] & 0xffL) << 8)
+                | ((data[offset + 2] & 0xffL) << 16) | ((data[offset + 3] & 0xffL) << 24);
+    }
+
     private static byte[] makeNso() throws Exception {
         byte[] text = new byte[0x100];
         byte[] rodata = new byte[0x100];
