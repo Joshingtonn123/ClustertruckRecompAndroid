@@ -55,6 +55,24 @@ class ClustertruckProbeTests(unittest.TestCase):
         self.assertEqual(report["main_npdm"]["path"], "exefs/main.npdm")
         self.assertIn("exefs/sdk", report["candidate_paths"])
 
+    def test_scan_directory_summarizes_romfs_without_unpacking_assets(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "exefs").mkdir()
+            romfs = root / "romfs"
+            (romfs / "StreamingAssets").mkdir(parents=True)
+            (romfs / "StreamingAssets" / "level.bundle").write_bytes(b"UnityFS" + b"\\0" * 25)
+            (romfs / "music.ogg").write_bytes(b"OggS" + b"\\0" * 12)
+            report = probe.scan_directory(root, 100, 8)
+
+        self.assertTrue(report["exefs_found"])
+        self.assertTrue(report["romfs"]["found"])
+        self.assertEqual(report["romfs"]["file_count"], 2)
+        self.assertEqual(report["romfs"]["total_bytes"], 48)
+        self.assertEqual(report["romfs"]["extension_counts"], {".bundle": 1, ".ogg": 1})
+        self.assertEqual(report["romfs"]["recognized_signatures"], {"OggS": 1, "UnityFS": 1})
+        self.assertIn("romfs/StreamingAssets/level.bundle", report["romfs"]["sample_paths"])
+
     def test_package_file_is_not_extracted(self):
         with tempfile.TemporaryDirectory() as temp:
             package = Path(temp) / "clustertruck.nsp"

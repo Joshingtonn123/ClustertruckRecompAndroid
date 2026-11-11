@@ -303,12 +303,12 @@ public class LASRecompActivity extends SDLActivity {
             .setTitle("Import " + format)
             .setMessage(
                 "NxDump handles " + format + " extraction. In NxDump, add the folder containing your dump, " +
-                "select the Clustertruck game, and extract ExeFS. RomFS is optional for the current generic " +
-                "recompilation step. Enable Merge update when an update is detected.\n\n" +
-                "When extraction finishes, return here and choose the extracted folder containing exefs/ " +
-                "(or choose the exefs folder itself). Your keys remain inside NxDump; do not share them.\n\n" +
-                "Note: this imports and recompiles executable code for analysis. Clustertruck boot/gameplay " +
-                "support is not integrated yet."
+                "select the Clustertruck game, and extract BOTH ExeFS and RomFS. Enable Merge update when an update " +
+                "is detected. Your keys remain inside NxDump; do not share them.\n\n" +
+                "When extraction finishes, return here and choose the parent folder containing exefs/ and romfs/. " +
+                "Choosing exefs/ alone still works for code analysis, but it cannot preserve the game assets.\n\n" +
+                "This development build recompiles executable code and preserves RomFS for the next integration " +
+                "steps. It does NOT boot or play Clustertruck yet."
             )
             .setPositiveButton("Open NxDump", (dialog, which) -> openNxDump(format))
             .setNegativeButton("Cancel", null)
@@ -809,6 +809,11 @@ public class LASRecompActivity extends SDLActivity {
         return null;
     }
 
+    private static Doc namedIgnoreCase(List<Doc> l, String name) {
+        for (Doc d : l) if (d.name != null && d.name.equalsIgnoreCase(name)) return d;
+        return null;
+    }
+
     // exefs: the folder with main and main.npdm; romfs: the folder with region_common - in the picked folder or a few
     // levels below it (as runtime/ui/launcher.mm find_game). romfsBin: a ready-made romfs.bin (hactool's --romfs, or
     // one from another install), used when there's no romfs/ folder: one file to copy instead of ~3,800
@@ -819,6 +824,8 @@ public class LASRecompActivity extends SDLActivity {
         if (depth > 4 || (exefs != null && romfs != null)) return;
         List<Doc> kids = children(tree, dir.id);
         if (exefs == null && named(kids, "main") != null && named(kids, "sdk") != null) exefs = dir;
+        Doc explicitRomfs = namedIgnoreCase(kids, "romfs");
+        if (romfs == null && explicitRomfs != null && explicitRomfs.dir) romfs = explicitRomfs;
         Doc rc = named(kids, "region_common");
         if (romfs == null && rc != null && rc.dir) romfs = dir;
         for (Doc k : kids)
@@ -930,17 +937,22 @@ public class LASRecompActivity extends SDLActivity {
             File dataRoot = getExternalFilesDir(null);
             if (dataRoot == null) throw new IOException("App storage is unavailable. Check the phone storage and retry.");
             File games = new File(dataRoot, "extracted");
-            if (compileOnly && "com.android.externalstorage.documents".equals(tree.getAuthority()) &&
-                    exefs.id.startsWith("primary:")) {
-                File local = new File(android.os.Environment.getExternalStorageDirectory(), exefs.id.substring(8));
-                if (ImportStorage.isInside(local, games))
-                    throw new IOException("Choose the original extracted ExeFS folder, not the app's own imported files.");
+            if (compileOnly && "com.android.externalstorage.documents".equals(tree.getAuthority())) {
+                for (Doc source : new Doc[] {exefs, romfs, romfsBin}) {
+                    if (source == null || source.id == null || !source.id.startsWith("primary:")) continue;
+                    File local = new File(android.os.Environment.getExternalStorageDirectory(), source.id.substring(8));
+                    if (ImportStorage.isInside(local, games))
+                        throw new IOException("Choose the original extracted game folder, not the app's own imported files.");
+                }
             }
             if (compileOnly) {
                 copied = reported = 0;
                 long exefsBytes = treeBytes(tree, exefs);
-                total = exefsBytes;
-                long needed = ImportStorage.requiredBytes(exefsBytes, 0);
+                long romfsBytes = romfs != null ? treeBytes(tree, romfs) : (romfsBin != null ? romfsBin.size : 0);
+                if (romfsBytes < 0)
+                    throw new IOException("The file provider did not report the size of romfs.bin. Copy the extracted game files to a local folder and select it again.");
+                total = Math.addExact(exefsBytes, romfsBytes);
+                long needed = ImportStorage.requiredBytes(exefsBytes, romfsBytes);
                 long available = games.getParentFile().getUsableSpace();
                 if (available < needed) {
                     nativeImportFailure(ImportStorage.spaceMessage(needed, available));
@@ -949,8 +961,20 @@ public class LASRecompActivity extends SDLActivity {
                 String name = DocumentsContract.getTreeDocumentId(tree);
                 nativeImportBegin(name.substring(name.lastIndexOf(':') + 1));
                 copyTree(tree, exefs, new File(games, "exefs"));
+                if (romfs != null) {
+                    copyTree(tree, romfs, new File(games, "romfs"));
+                } else if (romfsBin != null) {
+                    Uri image = DocumentsContract.buildDocumentUriUsingTree(tree, romfsBin.id);
+                    try (InputStream in = getContentResolver().openInputStream(image)) {
+                        if (in == null) throw new IOException("Could not open romfs.bin.");
+                        File copiedImage = copy(in, new File(games, "romfs.bin"));
+                        if (romfsBin.size >= 0 && copiedImage.length() != romfsBin.size)
+                            throw new IOException("Incomplete copy of romfs.bin. Select the local game folder and retry.");
+                        copied += copiedImage.length();
+                    }
+                }
                 nativeImportProgress(copied, total);
-                nativeImportDone(6);  // ExeFS-only: generic main+sdk recompilation, no game boot.
+                nativeImportDone(6);  // Generic code compilation only; ExeFS and any RomFS are retained, no game boot.
                 return;
             }
             if ("com.android.externalstorage.documents".equals(tree.getAuthority())) {

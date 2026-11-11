@@ -167,6 +167,24 @@ def inspect_single_file(path: Path) -> dict[str, Any]:
     return result
 
 
+def classify_asset_magic(prefix: bytes) -> str:
+    """Identify a few common asset/container signatures without unpacking file contents."""
+    signatures = (
+        (b"UnityFS", "UnityFS"),
+        (b"UnityRaw", "UnityRaw"),
+        (b"UnityWeb", "UnityWeb"),
+        (b"UnityArchive", "UnityArchive"),
+        (b"OggS", "OggS"),
+        (b"RIFF", "RIFF"),
+        (b"fLaC", "FLAC"),
+        (b"PK\\x03\\x04", "ZIP"),
+    )
+    for magic, label in signatures:
+        if prefix.startswith(magic):
+            return label
+    return "other"
+
+
 def scan_directory(root: Path, max_files: int, max_nso: int) -> dict[str, Any]:
     root = root.resolve()
     file_count = 0
@@ -175,11 +193,25 @@ def scan_directory(root: Path, max_files: int, max_nso: int) -> dict[str, Any]:
     magic_counts: Counter[str] = Counter()
     candidate_paths: list[str] = []
     main_npdm_path: Path | None = None
+    exefs_found = root.name.lower() == "exefs"
+    romfs_found = root.name.lower() == "romfs"
+    romfs_file_count = 0
+    romfs_total_bytes = 0
+    romfs_extensions: Counter[str] = Counter()
+    romfs_signatures: Counter[str] = Counter()
+    romfs_samples: list[str] = []
     truncated = False
 
     for current, dirs, files in os.walk(root):
         dirs.sort()
         files.sort()
+        current_rel = Path(current).relative_to(root)
+        current_parts = [part.lower() for part in current_rel.parts]
+        in_romfs = root.name.lower() == "romfs" or "romfs" in current_parts
+        if "exefs" in current_parts or any(d.lower() == "exefs" for d in dirs):
+            exefs_found = True
+        if in_romfs or any(d.lower() == "romfs" for d in dirs):
+            romfs_found = True
         for filename in files:
             file_count += 1
             if file_count > max_files:
@@ -194,6 +226,16 @@ def scan_directory(root: Path, max_files: int, max_nso: int) -> dict[str, Any]:
 
             suffix = path.suffix.lower()
             lower_name = filename.lower()
+            if in_romfs:
+                romfs_file_count += 1
+                romfs_total_bytes += size
+                romfs_extensions[suffix or "(no extension)"] += 1
+                if len(romfs_samples) < 20:
+                    romfs_samples.append(rel)
+                if sum(romfs_signatures.values()) < 32:
+                    signature = classify_asset_magic(read_prefix(path, 16))
+                    if signature != "other":
+                        romfs_signatures[signature] += 1
             if lower_name == "main.npdm":
                 main_npdm_path = path
 
@@ -258,6 +300,16 @@ def scan_directory(root: Path, max_files: int, max_nso: int) -> dict[str, Any]:
         "nso_modules_omitted": max(0, len(nso_paths) - len(nso_reports)),
         "main_nso": main_nso,
         "main_npdm": npdm_info,
+        "exefs_found": exefs_found,
+        "romfs": {
+            "found": romfs_found,
+            "file_count": romfs_file_count,
+            "total_bytes": romfs_total_bytes,
+            "extension_counts": dict(sorted(romfs_extensions.items())),
+            "recognized_signatures": dict(sorted(romfs_signatures.items())),
+            "sample_paths": romfs_samples,
+            "counts_are_partial": truncated,
+        },
         "magic_counts_in_sampled_files": dict(magic_counts),
         "candidate_paths": candidate_paths[:200],
         "notes": [

@@ -14,10 +14,10 @@ The `clustertruck-dev` branch now contains:
 - A generic NSO-to-C generator mode which bypasses Zelda-only build-ID and instruction-patch assumptions for the main module.
 - The Android runtime is compiled with a Clustertruck generic-title profile: it accepts a valid NSO main module without selecting the fork's Zelda address tables, and disables Zelda version matching / hot-function hints. The generic address table is all-zero, so title-specific hooks are not safe to call.
 - Android game-code builder integration that invokes generic mode for the main NSO and avoids Zelda-specific hot-function hints for an unknown title.
-- An Android ExeFS-only import path which accepts an already-extracted folder containing Switch `main` and `sdk`, then runs generic code generation without requiring Zelda's RomFS files. It reports compilation separately and deliberately does not attempt to boot the result.
+- An Android generic-title import path which accepts an extracted ExeFS folder and preserves a sibling `romfs/` folder or `romfs.bin` for subsequent asset analysis. The current generic step still compiles executable code only and deliberately does not attempt to boot the result.
 - A Switch-only read-only probe for visible XCI/NSP directory metadata, NSO module headers/build IDs, and `main.npdm`.
 - Generic runtime diagnostics report unimplemented imports and warn when `subsdk*` modules are present, since this loader currently loads only `main` and `sdk`.
-- The Android dump probe can inspect bounded NSO dynamic metadata (needed libraries, imported symbols, exports, relocation types) and checks for the exact `nn::init::Start` startup export expected by the current boot routine.
+- The Android dump probe inventories an extracted `romfs/` tree (file count, total bytes, extensions and a small signature sample) without unpacking or copying its assets. Its NSO inspector reads segment ranges in file-offset order, skipping large alignment/padding gaps while keeping per-segment and decompressed-image safety limits.
 - CI tests, a diagnostic app build, and a full Android app build job that validates the code-generation importer and native runtime build.
 
 The generic generator is tested with a synthetic NSO containing a function that returns. This proves the generic generator path can emit C for an unknown build ID; it does not prove the real Clustertruck executable is supported. The actual Switch `main` and `sdk` modules still need to be analyzed. The generic profile removes one known boot-time rejection only; the loader, startup symbol, Unity-facing service imports, NVN behavior and any extra ExeFS modules remain unverified.
@@ -30,9 +30,10 @@ A separate Android 11+ probe app is at [`android/clustertruck-probe/`](android/c
 2. **Inspect XCI** — reads the cartridge header and visible HFS0 directory metadata for its partitions, listing filenames, sizes and visible file signatures. It does not decrypt or extract NCA payloads.
 3. **Inspect standalone NSO** — reports its visible build ID, flags, BSS size, and text/rodata/data segment sizes and offsets.
 4. **Scan an already-extracted Switch folder** — looks for the `main`, `sdk`, `rtld`, `subsdk*` NSO module headers and hashes `main.npdm`. It reads only those headers and the NPDM file for hashing; it does not inspect engine data, unpack or modify files.
-5. **Share report** — copies or shares the text report so module metadata can be assessed without uploading game files.
+5. **RomFS inventory** — when the selected extracted root contains `romfs/`, counts files and bytes, groups extensions, samples paths and checks a small prefix of up to 32 files for familiar asset signatures. It does not unpack the assets.
+6. **Share report** — copies or shares the text report so module metadata can be assessed without uploading game files.
 
-The probe does not contain game files or keys, decrypt packages, modify the dump, or run the game. An NSP/XCI filename listing alone cannot prove that the executable is supported. A report from an already-extracted Switch ExeFS folder is the next useful input.
+The probe does not contain game files or keys, decrypt packages, modify the dump, or run the game. An NSP/XCI filename listing alone cannot prove that the executable is supported. A report from the extracted game root containing both `exefs/` and `romfs/` is the most useful input.
 
 ## Generic NSO code generation
 
