@@ -14,10 +14,10 @@
 
 #define SETTINGS_FILE settings_file()
 
-// LARECOMP_SETTINGS=<path>: another settings file (test runs never touch the player's larecomp.ini)
+// LARECOMP_SETTINGS=<path>: another settings file (test runs never touch the player's clustertruck.ini)
 static const char *settings_file(void) {
     const char *e = getenv("LARECOMP_SETTINGS");
-    return e && *e ? e : "larecomp.ini";
+    return e && *e ? e : "clustertruck.ini";
 }
 
 Settings g_settings = {
@@ -262,7 +262,7 @@ void settings_load(void) {
 
 void settings_save(void) {
 #ifdef __ANDROID__
-    // Written to larecomp.ini.tmp, then put in its place: a phone ends apps in the background at any moment (the app
+    // Written to clustertruck.ini.tmp, then put in its place: a phone ends apps in the background at any moment (the app
     // saves then too: vulkan/device.c), and a file cut short there lost every setting. One writer at a time. (From
     // LASRecomp-Android-Plus, MIT.)
     static atomic_flag lock = ATOMIC_FLAG_INIT;
@@ -275,7 +275,7 @@ void settings_save(void) {
     FILE *f = fopen(SETTINGS_FILE, "w");
     if (!f) { LOG("[settings] cannot write %s\n", SETTINGS_FILE); return; }
 #endif
-    fprintf(f, "# LAS Recomp settings (edited from the in-game menu: F1, Esc, or Minus+Plus on a controller)\n");
+    fprintf(f, "# Clustertruck Recomp settings (edited from the in-game menu: F1, Esc, or Minus+Plus on a controller)\n");
     fprintf(f, "aspect = %s\n", g_settings.aspect == ASPECT_ORIGINAL ? "original" : "unlocked");
     fprintf(f, "fullscreen = %d\n", g_settings.fullscreen);
     fprintf(f, "volume = %.2f\n", g_settings.volume);
