@@ -2,7 +2,7 @@
 # Vulkan backend and the ImGui UI. The game code is not in it: lasgame.so, generated with gen.py --dyn-base and built
 # from the player's own game files, is loaded at run time (docs/ANDROID-PORT.md).
 cmake_minimum_required(VERSION 3.22)
-project(lasrecomp C CXX ASM)
+project(clustertruck_recomp C CXX ASM)
 
 set(R ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../..)   # the repository
 get_filename_component(R ${R} ABSOLUTE)
@@ -11,7 +11,7 @@ if(NOT EXISTS ${DEPS}/lib/libSDL3.so)
     message(FATAL_ERROR "run android/deps/build_deps.sh first")
 endif()
 if(NOT LAS_GEN_DIR)
-    message(FATAL_ERROR "LAS_GEN_DIR (the Gradle build's generated files: smaa_hlsl.inc) is not set")
+    message(FATAL_ERROR "LAS_GEN_DIR (the Clustertruck Gradle build's generated files: smaa_hlsl.inc) is not set")
 endif()
 
 include(${R}/android/gamelib_id.cmake)  # (GAMELIB_ID: the same as lasgame.so's, android/gamelib)
