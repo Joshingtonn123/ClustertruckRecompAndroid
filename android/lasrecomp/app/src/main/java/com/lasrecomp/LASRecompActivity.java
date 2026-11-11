@@ -948,9 +948,18 @@ public class LASRecompActivity extends SDLActivity {
             if (compileOnly) {
                 copied = reported = 0;
                 long exefsBytes = treeBytes(tree, exefs);
-                long romfsBytes = romfs != null ? treeBytes(tree, romfs) : (romfsBin != null ? romfsBin.size : 0);
-                if (romfsBytes < 0)
-                    throw new IOException("The file provider did not report the size of romfs.bin. Copy the extracted game files to a local folder and select it again.");
+                long romfsBytes = 0;
+                if (romfs != null) {
+                    romfsTree = tree;
+                    romfsFiles.clear();
+                    romfsPaths.clear();
+                    listFiles(tree, romfs, "");
+                    for (Doc file : romfsFiles) romfsBytes = Math.addExact(romfsBytes, file.size);
+                } else if (romfsBin != null) {
+                    romfsBytes = romfsBin.size;
+                    if (romfsBytes < 0)
+                        throw new IOException("The file provider did not report the size of romfs.bin. Copy the extracted game files to a local folder and select it again.");
+                }
                 total = Math.addExact(exefsBytes, romfsBytes);
                 long needed = ImportStorage.requiredBytes(exefsBytes, romfsBytes);
                 long available = games.getParentFile().getUsableSpace();
@@ -961,20 +970,31 @@ public class LASRecompActivity extends SDLActivity {
                 String name = DocumentsContract.getTreeDocumentId(tree);
                 nativeImportBegin(name.substring(name.lastIndexOf(':') + 1));
                 copyTree(tree, exefs, new File(games, "exefs"));
+                nativeImportProgress(copied, total);
                 if (romfs != null) {
-                    copyTree(tree, romfs, new File(games, "romfs"));
+                    long[] sizes = new long[romfsFiles.size()];
+                    for (int i = 0; i < sizes.length; i++) sizes[i] = romfsFiles.get(i).size;
+                    String failed = nativeBuildRomfs(romfsPaths.toArray(new String[0]), sizes);
+                    romfsFiles.clear();
+                    romfsPaths.clear();
+                    if (failed != null) {
+                        nativeImportFailure(failed);
+                        return;
+                    }
                 } else if (romfsBin != null) {
                     Uri image = DocumentsContract.buildDocumentUriUsingTree(tree, romfsBin.id);
-                    try (InputStream in = getContentResolver().openInputStream(image)) {
-                        if (in == null) throw new IOException("Could not open romfs.bin.");
-                        File copiedImage = copy(in, new File(games, "romfs.bin"));
-                        if (romfsBin.size >= 0 && copiedImage.length() != romfsBin.size)
-                            throw new IOException("Incomplete copy of romfs.bin. Select the local game folder and retry.");
-                        copied += copiedImage.length();
+                    android.os.ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(image, "r");
+                    if (pfd == null) throw new IOException("Could not open romfs.bin.");
+                    String failed = nativeUseRomfsImage(pfd.detachFd());
+                    if (failed != null) {
+                        nativeImportFailure(failed);
+                        return;
                     }
                 }
-                nativeImportProgress(copied, total);
-                nativeImportDone(6);  // Generic code compilation only; ExeFS and any RomFS are retained, no game boot.
+                // The native RomFS path creates romfs.bin and extracts its path-based files into romfs/.
+                // Generic recompilation still stops here; it does not attempt game boot.
+                nativeImportProgress(total, total);
+                nativeImportDone(6);
                 return;
             }
             if ("com.android.externalstorage.documents".equals(tree.getAuthority())) {
