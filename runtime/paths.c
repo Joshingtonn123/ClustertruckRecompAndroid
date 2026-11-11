@@ -97,10 +97,10 @@ void rt_paths_init(void) {
         const char *ext = SDL_GetAndroidExternalStoragePath();
         snprintf(root, sizeof root, "%s", ext ? ext : SDL_GetAndroidInternalStoragePath());
 #elif defined(__linux__)
-        // (the AppImage is read-only): $XDG_DATA_HOME/clustertruck-recomp, ~/.local/share/lasrecomp by default
+        // (the AppImage is read-only): $XDG_DATA_HOME/clustertruck-recomp, ~/.local/share/clustertruck-recomp by default
         const char *xdg = getenv("XDG_DATA_HOME"), *home = getenv("HOME");
-        if (xdg && *xdg == '/') snprintf(root, sizeof root, "%s/lasrecomp", xdg);
-        else snprintf(root, sizeof root, "%s/.local/share/lasrecomp", home && *home ? home : "/tmp");
+        if (xdg && *xdg == '/') snprintf(root, sizeof root, "%s/clustertruck-recomp", xdg);
+        else snprintf(root, sizeof root, "%s/.local/share/clustertruck-recomp", home && *home ? home : "/tmp");
 #else
         const char *home = getenv("HOME");
         snprintf(root, sizeof root, "%s/Library/Application Support/" RT_BUNDLE_ID, home && *home ? home : "/tmp");
@@ -132,7 +132,7 @@ bool rt_resource(const char *name, const char *dev_rel, char *out, size_t n) {
     }
     if (dev_rel) {
         snprintf(c[2], sizeof c[2], "%s" SEP "%s", g_start, dev_rel);
-        snprintf(c[3], sizeof c[3], "%s" SEP ".." SEP "%s", g_exe_dir, dev_rel);  // build/lasrecomp -> repo root
+        snprintf(c[3], sizeof c[3], "%s" SEP ".." SEP "%s", g_exe_dir, dev_rel);  // build/clustertruck-recomp -> repo root
     }
     for (int i = 0; i < 4; i++)
         if (c[i][0] && exists(c[i])) return (size_t)snprintf(out, n, "%s", c[i]) < n;  // (as is: a venv python must stay a link)
