@@ -538,7 +538,7 @@ extern "C" bool vk_adreno_8xx(const char *name);  // (Driver compatibility's Aut
 extern "C" bool vk_lrz_auto(const char *name);
 extern "C" bool vk_lrz_at_start(void);
 extern "C" const char *vk_gpu_name(void);
-static std::string g_log_folder;  // its name ("Download/LASRecomp"), "" with none
+static std::string g_log_folder;  // its name ("Download/Clustertruck"), "" with none
 static bool g_log_folder_read;
 
 static void log_folder_read() {  // (LASRecompActivity.logFolderName, once: then from each pick)
@@ -1640,7 +1640,7 @@ static void prelaunch_tab(float sc) {
     ImGui::SameLine();
 #endif
     static bool shot_del = getenv("LARECOMP_LAUNCHER_SHOT") && strstr(getenv("LARECOMP_LAUNCHER_SHOT"), ":askdelete");
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(CLUSTERTRUCK_GENERIC_TITLE)
     bool keep_base = base_kept();
 #else
     bool keep_base = false;
@@ -2467,7 +2467,7 @@ extern "C" void launcher_run(const char *root) {
                     } else {
                         if (opt_action("Yes, delete them", gb, "Deletes the extracted game files now.", true)) {
                             bool ok = rt_remove_game_files(g_root.c_str());
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(CLUSTERTRUCK_GENERIC_TITLE)
                             if (ok) {  // (the release in play gone: another one installed takes its place)
                                 std::vector<std::string> others = other_versions();
                                 if (!others.empty() && switch_version(others.back())) g_bg = 0;
