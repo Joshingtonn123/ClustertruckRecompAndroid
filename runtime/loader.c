@@ -31,70 +31,70 @@ static bool module_contains(Module *m, uint64_t offset, uint64_t length) {
 // Adapted from the MIT-licensed SavageWindRecomp loader's DT_GNU_HASH handling.
 // Additional bounds checks prevent malformed hash chains from escaping the mapped NSO image.
 static uint64_t gnu_hash_nsyms(Module *m, uint64_t hash) {
-    if (hash < m->base) FATAL("%s: GNU hash table precedes its module\\n", m->name);
+    if (hash < m->base) FATAL("%s: GNU hash table precedes its module\n", m->name);
     uint64_t h = hash - m->base;
-    if (!module_contains(m, h, 16)) FATAL("%s: truncated GNU hash header\\n", m->name);
+    if (!module_contains(m, h, 16)) FATAL("%s: truncated GNU hash header\n", m->name);
     uint32_t nbuckets = *(uint32_t *)(m->base + h);
     uint32_t symoffset = *(uint32_t *)(m->base + h + 4);
     uint32_t bloom_size = *(uint32_t *)(m->base + h + 8);
     if (!nbuckets || nbuckets > MAX_DYNSYM_COUNT || symoffset > MAX_DYNSYM_COUNT ||
         bloom_size > MAX_DYNSYM_COUNT)
-        FATAL("%s: unreasonable GNU hash dimensions\\n", m->name);
+        FATAL("%s: unreasonable GNU hash dimensions\n", m->name);
     uint64_t bloom_bytes = (uint64_t)bloom_size * 8;
     if (!module_contains(m, h + 16, bloom_bytes))
-        FATAL("%s: GNU hash bloom filter is outside the module\\n", m->name);
+        FATAL("%s: GNU hash bloom filter is outside the module\n", m->name);
     uint64_t buckets = h + 16 + bloom_bytes;
     uint64_t bucket_bytes = (uint64_t)nbuckets * 4;
     if (!module_contains(m, buckets, bucket_bytes))
-        FATAL("%s: GNU hash buckets are outside the module\\n", m->name);
+        FATAL("%s: GNU hash buckets are outside the module\n", m->name);
     uint64_t chain = buckets + bucket_bytes;
     uint32_t last = 0;
     for (uint32_t i = 0; i < nbuckets; i++) {
         uint32_t value = *(uint32_t *)(m->base + buckets + (uint64_t)i * 4);
-        if (value && value < symoffset) FATAL("%s: invalid GNU hash bucket index\\n", m->name);
+        if (value && value < symoffset) FATAL("%s: invalid GNU hash bucket index\n", m->name);
         if (value > last) last = value;
     }
     if (last < symoffset) return symoffset;
     for (uint64_t index = last; index < MAX_DYNSYM_COUNT; index++) {
         uint64_t chain_off = chain + (index - symoffset) * 4;
         if (!module_contains(m, chain_off, 4))
-            FATAL("%s: GNU hash chain has no terminating entry\\n", m->name);
+            FATAL("%s: GNU hash chain has no terminating entry\n", m->name);
         uint32_t value = *(uint32_t *)(m->base + chain_off);
         if (value & 1) return index + 1;
     }
-    FATAL("%s: GNU hash chain exceeds the symbol limit\\n", m->name);
+    FATAL("%s: GNU hash chain exceeds the symbol limit\n", m->name);
 }
 
 // DT_RELR packs relative relocations: even entries name one target; odd entries are
 // bitmaps for the next 63 pointer-sized targets. The addend is already stored at each target.
 static uint64_t relocate_relr(Module *m, uint64_t table, uint64_t size) {
-    if (table < m->base || size % 8) FATAL("%s: invalid DT_RELR table\\n", m->name);
+    if (table < m->base || size % 8) FATAL("%s: invalid DT_RELR table\n", m->name);
     uint64_t table_off = table - m->base;
-    if (!module_contains(m, table_off, size)) FATAL("%s: DT_RELR table is outside the module\\n", m->name);
+    if (!module_contains(m, table_off, size)) FATAL("%s: DT_RELR table is outside the module\n", m->name);
     uint64_t cursor = 0, count = 0;
     bool cursor_valid = false;
     for (uint64_t i = 0; i < size / 8; i++) {
         uint64_t entry = ((uint64_t *)(m->base + table_off))[i];
         if (!(entry & 1)) {
             if ((entry & 7) || !module_contains(m, entry, 8))
-                FATAL("%s: DT_RELR target is outside the module or unaligned\\n", m->name);
+                FATAL("%s: DT_RELR target is outside the module or unaligned\n", m->name);
             *(uint64_t *)(m->base + entry) += m->base;
-            if (entry > UINT64_MAX - 8) FATAL("%s: DT_RELR cursor overflow\\n", m->name);
+            if (entry > UINT64_MAX - 8) FATAL("%s: DT_RELR cursor overflow\n", m->name);
             cursor = entry + 8;
             cursor_valid = true;
             count++;
         } else {
-            if (!cursor_valid) FATAL("%s: DT_RELR bitmap precedes an address\\n", m->name);
+            if (!cursor_valid) FATAL("%s: DT_RELR bitmap precedes an address\n", m->name);
             for (int bit = 0; bit < 63; bit++) {
                 if (!((entry >> (bit + 1)) & 1)) continue;
                 uint64_t delta = (uint64_t)bit * 8;
                 if (cursor > m->size || delta > m->size - cursor ||
                     !module_contains(m, cursor + delta, 8))
-                    FATAL("%s: DT_RELR bitmap target is outside the module\\n", m->name);
+                    FATAL("%s: DT_RELR bitmap target is outside the module\n", m->name);
                 *(uint64_t *)(m->base + cursor + delta) += m->base;
                 count++;
             }
-            if (cursor > UINT64_MAX - 63 * 8) FATAL("%s: DT_RELR cursor overflow\\n", m->name);
+            if (cursor > UINT64_MAX - 63 * 8) FATAL("%s: DT_RELR cursor overflow\n", m->name);
             cursor += 63 * 8;
         }
     }
