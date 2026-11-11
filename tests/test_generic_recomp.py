@@ -65,14 +65,38 @@ class GenericNsoRecompTests(unittest.TestCase):
         self.assertIn("copied = reported = 0;", activity)
         self.assertIn('named(kids, "sdk") != null', activity)
 
-    def test_android_gamebuild_uses_generic_mode_for_main_only(self):
+    def test_android_gamebuild_includes_optional_subsdk0(self):
         source = (ROOT / "runtime" / "gamebuild.c").read_text()
+        self.assertIn("Gen gens[3]", source)
         self.assertIn('if (i == 0) add(&a, "--generic");', source)
-        self.assertIn('if (i == 1) { add(&a, "--hle"); add(&a, t.hle); }', source)
+        self.assertIn('if (i > 0) { add(&a, "--hle"); add(&a, t.hle); }', source)
+        self.assertIn("file_exists(subsdk_path) ? 3 : 2", source)
         self.assertIn('unprofiled title: Zelda hot-function hints disabled', source)
+        loader = (ROOT / "runtime" / "loader.c").read_text()
+        self.assertIn('load_nso(m, path, SUBSDK0_BASE)', loader)
+        dispatcher = (ROOT / "runtime" / "dispatch.c").read_text()
+        self.assertIn("static FnTable tables[3]", dispatcher)
         script = (ROOT / "android" / "build_gamelib.sh").read_text()
-        self.assertIn('gen.py main "$EXEFS/main" 0x7000000000 "$GEN/main" --generic --simd asm --dyn-base', script)
-        self.assertNotIn('gen.py sdk "$EXEFS/sdk" 0x7004000000 "$GEN/sdk" --generic', script)
+        self.assertIn('gen.py subsdk0 "$EXEFS/subsdk0" 0x7010000000 "$GEN/subsdk0"', script)
+        cmake = (ROOT / "android" / "gamelib" / "CMakeLists.txt").read_text()
+        self.assertIn("${LAS_GEN}/subsdk0/*.c", cmake)
+
+    def test_generator_emits_optional_subsdk0_function_table(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            nso, out = root / "subsdk0", root / "generated"
+            make_synthetic_nso(nso)
+            command = [
+                sys.executable, str(GEN), "subsdk0", str(nso), "0x7010000000", str(out),
+                "--simd", "c", "--dyn-base",
+            ]
+            result = subprocess.run(command, cwd=ROOT / "tools", text=True,
+                                    capture_output=True, timeout=90)
+            self.assertEqual(result.returncode, 0, msg=result.stderr[-4000:])
+            table = (out / "subsdk0_table.c").read_text()
+            self.assertIn("subsdk0_fn_addrs", table)
+            self.assertIn("subsdk0_fn_ptrs", table)
+            self.assertIn("subsdk0_fn_count = 1", table)
 
     def run_generator(self, nso: Path, out: Path, generic: bool) -> subprocess.CompletedProcess:
         command = [

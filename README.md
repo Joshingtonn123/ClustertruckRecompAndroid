@@ -16,11 +16,11 @@ The `clustertruck-dev` branch now contains:
 - Android game-code builder integration that invokes generic mode for the main NSO and avoids Zelda-specific hot-function hints for an unknown title.
 - An Android generic-title import path which accepts an extracted ExeFS folder and preserves a sibling `romfs/` folder or `romfs.bin` for subsequent asset analysis. The current generic step still compiles executable code only and deliberately does not attempt to boot the result.
 - A Switch-only read-only probe for visible XCI/NSP directory metadata, NSO module headers/build IDs, and `main.npdm`.
-- Generic runtime diagnostics report unimplemented imports and warn when `subsdk*` modules are present, since this loader currently loads only `main` and `sdk`.
+- The generic runtime now generates and links optional `subsdk0` code alongside `main` and `sdk`; its exports are loaded before relocations so other modules can resolve symbols from it. Other `subsdk*` modules remain unsupported.
 - The Android dump probe inventories an extracted `romfs/` tree (file count, total bytes, extensions and a small signature sample) without unpacking or copying its assets. Its NSO inspector reads segment ranges in file-offset order, skipping large alignment/padding gaps while keeping per-segment and decompressed-image safety limits.
 - CI tests, a diagnostic app build, and a full Android app build job that validates the code-generation importer and native runtime build.
 
-The generic generator is tested with a synthetic NSO containing a function that returns. This proves the generic generator path can emit C for an unknown build ID; it does not prove the real Clustertruck executable is supported. The actual Switch `main` and `sdk` modules still need to be analyzed. The generic profile removes one known boot-time rejection only; the loader, startup symbol, Unity-facing service imports, NVN behavior and any extra ExeFS modules remain unverified.
+The generic generator is tested with a synthetic NSO containing a function that returns. This proves the generic generator path can emit C for an unknown build ID; it does not prove the real Clustertruck executable is supported. The actual Switch executable payloads have not yet been supplied for direct code-generation testing. The generic loader now maps `main`, `sdk`, and optional `subsdk0`, but the real module startup order, unresolved imports, Unity-facing services, NVN behavior and any additional ExeFS modules remain unverified.
 
 ## Diagnostic app
 
@@ -39,13 +39,13 @@ The probe does not contain game files or keys, decrypt packages, modify the dump
 
 `tools/gen.py --generic` accepts an arbitrary main-module build ID and disables the Zelda-specific address/patch and randomizer substitutions. The Android on-device builder passes this option for the main NSO; its SDK module continues through the existing HLE-symbol generator path. When the main build ID is not in the Zelda version table, the Android builder also disables Zelda-derived hot-function address hints.
 
-The ExeFS-only Android path copies a selected extracted `main` + `sdk` folder and invokes this generic builder. A successful result means native C/ARM64 game code was generated; **it does not mean the game can boot**. The base runtime still has title-specific startup, service/HLE, memory, filesystem, save and graphics assumptions.
+The Android importer accepts an extracted root with `exefs/` and, when available, preserves `romfs/` or `romfs.bin`. The builder recompiles `main` and `sdk`, plus `subsdk0` when it exists. A successful result means native C/ARM64 game code was generated; **it does not mean the game can boot**. The base runtime still has title-specific startup, service/HLE, memory, filesystem, save and graphics assumptions.
 
 ## What remains before Clustertruck can boot
 
 We still need non-sensitive metadata from the actual Switch build:
 
-- Confirm the actual `main` and `sdk` formats, build IDs, segment sizes, imports and relocation types.
+- Confirm the real `main`, `sdk` and `subsdk0` module metadata and run the actual executable payloads through code generation.
 - Run the real NSOs through the generator and fix unsupported instructions/relocations without applying unrelated title patches.
 - Identify the imported system services and the game entry/startup path.
 - Identify the actual graphics interface, then determine what renderer work or reuse is appropriate.
