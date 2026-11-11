@@ -83,6 +83,8 @@ def inspect_nso(path: Path, relative_path: str) -> dict[str, Any]:
             "needed_libraries": sorted(set(module.needed)),
             "import_count": len(module.imports()),
             "export_count": len(module.exports()),
+            "symbol_hash_style": module.symbol_hash_style,
+            "packed_relative_relocation_count": len(module.packed_relative_relocations),
             "relocation_types": dict(Counter(f"0x{rel[1]:x}" for rel in module.relocs)),
         })
     except Exception as exc:  # malformed or unsupported file; keep scanning

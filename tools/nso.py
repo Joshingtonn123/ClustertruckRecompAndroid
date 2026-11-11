@@ -5,6 +5,7 @@ import lz4.block
 
 DT_NULL, DT_NEEDED, DT_PLTRELSZ, DT_HASH, DT_STRTAB, DT_SYMTAB, DT_RELA, DT_RELASZ = 0, 1, 2, 4, 5, 6, 7, 8
 DT_STRSZ, DT_JMPREL, DT_RELACOUNT = 10, 23, 0x6FFFFFF9
+DT_RELRSZ, DT_RELR, DT_GNU_HASH = 35, 36, 0x6FFFFEF5
 R_AARCH64_ABS64, R_AARCH64_GLOB_DAT, R_AARCH64_JUMP_SLOT, R_AARCH64_RELATIVE = 257, 1025, 1026, 1027
 
 
@@ -55,19 +56,58 @@ class Nso:
                 needed.append(val)
             dyn.setdefault(tag, val)
         self.dyn = dyn
+        self.symbol_hash_style = "none"
         strtab = dyn.get(DT_STRTAB, 0)
         self.strtab = strtab
         self.needed = [self.cstr(strtab + n) for n in needed]
-        # dynsym count from DT_HASH nchain
+        # dynsym count comes from DT_HASH nchain or the final DT_GNU_HASH chain entry.
         self.syms = []
         if DT_HASH in dyn and DT_SYMTAB in dyn:
             nchain = self.u32(dyn[DT_HASH] + 4)
+            self.symbol_hash_style = "SysV"
+        elif DT_GNU_HASH in dyn and DT_SYMTAB in dyn:
+            nchain = self._gnu_hash_nsyms(dyn[DT_GNU_HASH])
+            self.symbol_hash_style = "GNU"
+        else:
+            nchain = 0
+        if nchain > 1_000_000:
+            raise ValueError("dynamic symbol count exceeds the safety limit")
+        if DT_SYMTAB in dyn:
             st = dyn[DT_SYMTAB]
+            if st < 0 or st + nchain * 24 > len(self.image):
+                raise ValueError("dynamic symbol table extends beyond the module image")
             for i in range(nchain):
                 o = st + i * 24
                 name, info, other, shndx = struct.unpack_from('<IBBH', self.image, o)
                 value, size = struct.unpack_from('<QQ', self.image, o + 8)
                 self.syms.append((self.cstr(strtab + name), info, shndx, value, size))
+        self.packed_relative_relocations = []
+        if DT_RELR in dyn:
+            relr_off = dyn[DT_RELR]
+            relr_size = dyn.get(DT_RELRSZ, 0)
+            if relr_size % 8 or relr_off < 0 or relr_off + relr_size > len(self.image):
+                raise ValueError("DT_RELR table is outside the module image or has an invalid size")
+            cursor = None
+            for entry_off in range(relr_off, relr_off + relr_size, 8):
+                entry = self.u64(entry_off)
+                if not (entry & 1):
+                    if entry & 7 or entry + 8 > len(self.image):
+                        raise ValueError("DT_RELR contains an unaligned or out-of-range target")
+                    self.packed_relative_relocations.append(entry)
+                    cursor = entry + 8
+                else:
+                    if cursor is None:
+                        raise ValueError("DT_RELR bitmap appears before an address")
+                    for bit in range(63):
+                        if entry & (1 << (bit + 1)):
+                            target = cursor + bit * 8
+                            if target + 8 > len(self.image):
+                                raise ValueError("DT_RELR bitmap target extends beyond the module")
+                            self.packed_relative_relocations.append(target)
+                            if len(self.packed_relative_relocations) > 1_000_000:
+                                raise ValueError("DT_RELR target count exceeds the safety limit")
+                    cursor += 63 * 8
+
         self.relocs = []
         for base_tag, size_tag in ((DT_RELA, DT_RELASZ), (DT_JMPREL, DT_PLTRELSZ)):
             if base_tag in dyn:
