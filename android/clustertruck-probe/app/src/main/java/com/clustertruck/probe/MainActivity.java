@@ -592,6 +592,8 @@ public final class MainActivity extends Activity {
             out.append("\nSwitch executable module headers:\n");
             for (String item : scan.nsoReports) out.append("  ").append(item).append('\n');
         }
+        if (!scan.nsoModules.isEmpty())
+            out.append('\n').append(NsoInspector.linkAudit(scan.nsoModules)).append('\n');
         out.append("\nDetected ExeFS folder: ").append(scan.exefsFound ? "YES" : "NO").append('\n');
         out.append("Detected RomFS folder: ").append(scan.romfsFound ? "YES" : "NO").append('\n');
         if (scan.romfsFound) {
@@ -639,6 +641,7 @@ public final class MainActivity extends Activity {
         final Map<String, Integer> romfsSignatures = new TreeMap<>();
         final List<String> romfsSamples = new ArrayList<>();
         final List<String> nsoReports = new ArrayList<>();
+        final List<NsoInspector.ModuleReport> nsoModules = new ArrayList<>();
     }
 
     private void scanChildren(Uri treeUri, String parentId, String prefix, int depth,
@@ -724,10 +727,11 @@ public final class MainActivity extends Activity {
         if (moduleCandidate) {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
                 if (input != null) {
-                    String info = NsoInspector.inspect(input, path, size);
+                    NsoInspector.ModuleReport info = NsoInspector.inspectDetailed(input, path, size);
                     if (info != null) {
                         scan.nsoCount++;
-                        if (scan.nsoReports.size() < 64) scan.nsoReports.add(info);
+                        if (scan.nsoReports.size() < 64) scan.nsoReports.add(info.text);
+                        if (scan.nsoModules.size() < 64) scan.nsoModules.add(info);
                     } else if ("main".equals(basename) || "sdk".equals(basename)) {
                         if (scan.nsoReports.size() < 64)
                             scan.nsoReports.add(path + " — expected Switch NSO0 header was not found");
