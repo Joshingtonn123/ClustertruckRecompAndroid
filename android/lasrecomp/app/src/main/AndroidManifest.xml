@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- After SDL3's android-project template (3.4.16), with LAS Recomp's activity. -->
+<!-- Clustertruck Android app, using the LAS-derived SDL activity and generic-title runtime. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
@@ -19,7 +19,7 @@
 
     <application
         android:label="Clustertruck Recomp (Experimental)"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_clustertruck"
         android:allowBackup="false"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
         android:enableOnBackInvokedCallback="false"
