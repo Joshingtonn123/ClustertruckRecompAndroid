@@ -15,7 +15,7 @@ import android.util.Log;
 // While the app is open, a foreground service: the game takes a few GB, so a trip to the home screen made the process
 // the first one Android (and some makers' background app killers) ended, and coming back started the game over from
 // the start screen. As a foreground service the process stays "perceptible" and the game waits paused where it was
-// (runtime/nvn/vulkan/device.c: nothing runs in the background). Started by LASRecompActivity whenever it's in front
+// (runtime/nvn/vulkan/device.c: nothing runs in the background). Started by the Clustertruck activity whenever it's in front
 // (only a visible app may start one), ended with it. Nothing runs in here: it only keeps the process alive.
 // From Nycolazs's LASRecomp-Android-Plus (MIT).
 public class PlayService extends Service {
@@ -26,7 +26,7 @@ public class PlayService extends Service {
         try {
             c.startForegroundService(new Intent(c, PlayService.class));
         } catch (Exception e) {  // (not allowed right now: the game runs on, only less protected in the background)
-            Log.w("LASRecomp", "play service: " + e);
+            Log.w("ClustertruckRecomp", "play service: " + e);
         }
     }
 
