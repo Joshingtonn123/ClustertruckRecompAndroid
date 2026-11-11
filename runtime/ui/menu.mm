@@ -928,6 +928,10 @@ static void tabs_body(float scale, bool in_game, void (*prelaunch)(float)) {
                                                                 // Cheats, Warp, Save Editor, Quit (ids stay: test hooks)
 #endif
     for (int i : order) {  // (Quit: in game only - the start screen has its own QUIT, and an eleventh tab cut names short)
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+        // The inherited gameplay, save, warp, cheat and cosmetic pages target Link's Awakening only.
+        if (i != 0 && i != 1 && i != 8 && i != 9) continue;  // Video, Audio, Controls, Quit
+#endif
 #ifdef __ANDROID__
         if (i == 3) continue;  // (no randomizer: its seed generator is a desktop program)
 #endif
