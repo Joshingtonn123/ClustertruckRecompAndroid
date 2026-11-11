@@ -683,8 +683,8 @@ static void tab_quit(float scale, bool in_game) {
         ask = 0;
     const char *lost = in_game ? tr("\n\nProgress since your last save is lost.") : "";
     char d1[300], d2[300];
-    snprintf(d1, sizeof d1, tr("Leaves the game and goes back to the LAS Recomp start screen.%s"), lost);
-    snprintf(d2, sizeof d2, tr("Closes LAS Recomp.%s"), lost);
+    snprintf(d1, sizeof d1, tr("Leaves the game and goes back to the Clustertruck Recomp start screen.%s"), lost);
+    snprintf(d2, sizeof d2, tr("Closes Clustertruck Recomp.%s"), lost);
 #ifdef __ANDROID__
     const char *quit_app = "Close app", *quit_app_yes = "Close app";
     const char *quit_start = "Return to start", *quit_start_yes = "Return to start";
