@@ -247,7 +247,7 @@ static void set_failure(int k) {
         "Choose the folder that holds the game files.",
         "Choose the folder that holds the game files.",
         "Make sure there's about 12 GB free and try again.",
-        "Clustertruck Recomp needs version 1.0.0, 1.0.1 or 1.1.0 of the game.",
+        "Choose a valid Clustertruck Switch dump with exefs/main and exefs/sdk.",
         "Some files are missing. Choose the folder again; if it happens again, dump the game again.",
         "Make sure there's about 2 GB free and try again. If it keeps happening, report it on Discord or GitHub."};
     if (k >= 1 && k <= 6) set_job(head[k], true, hint[k]);
@@ -1283,9 +1283,9 @@ static bool menu_tip(float s) {
         static const char *const pad[] = {"Minus + Plus", "View + Menu", "Create + Options"};
         ImGui::PushTextWrapPos(0);
 #ifdef __ANDROID__
-        ImGui::TextUnformatted(tr("Clustertruck Recomp has its own menu for settings, cosmetics and more."));
+        ImGui::TextUnformatted(tr("Clustertruck Recomp has its own menu for controls, video and audio settings."));
 #else
-        ImGui::TextUnformatted("Clustertruck Recomp has its own menu for settings, the randomizer, cosmetics and more.");
+        ImGui::TextUnformatted("Clustertruck Recomp has its own menu for controls, video and audio settings.");
 #endif
         ImGui::Spacing();
         int fam = bind_label_family() % 3;
@@ -1608,10 +1608,10 @@ static void prelaunch_tab(float sc) {
             if (g_settings.log_file && folder.empty()) android_call("pickLogFolder");  // (then nativeLogFolderPicked)
             else android_log_file(g_settings.log_file);
         }
-        ImGui::TextDisabled("%s", tr("Writes what the app reports (GPU, driver, errors) to lasrecomp-log.txt in a folder you "
-                                     "choose (create one, e.g. Download/LASRecomp), to open on the phone and send with a "
+        ImGui::TextDisabled("%s", tr("Writes what the app reports (GPU, driver, errors) to clustertruck-log.txt in a folder you "
+                                     "choose (create one, e.g. Download/Clustertruck), to open on the phone and send with a "
                                      "bug report. Turn it on and play until the problem shows; after a crash, the run "
-                                     "before is kept as lasrecomp-log-previous.txt."));
+                                     "before is kept as clustertruck-log-previous.txt."));
         if (folder.empty()) ImGui::TextDisabled("%s", tr("No folder chosen: the log stays in the app's own folder, which "
                                                          "Android only lets a computer (adb) read."));
         else ImGui::Text(tr("Log folder: %s"), folder.c_str());
@@ -1668,7 +1668,7 @@ static void prelaunch_tab(float sc) {
             bool ok = rt_remove_game_files(g_root.c_str());  // (runtime/paths.c: only what the extraction made)
             set_job(ok ? "Game files deleted." : "Could not delete the game files (not in Clustertruck Recomp's data folder?).", !ok);
             g_files_deleted = true, gb = -1;
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(CLUSTERTRUCK_GENERIC_TITLE)
             if (ok) {  // (the release in play gone: another one installed takes its place - the start screen then goes
                        // to setting up only if that one isn't ready)
                 std::vector<std::string> others = other_versions();
@@ -1684,7 +1684,7 @@ static void prelaunch_tab(float sc) {
             ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(CLUSTERTRUCK_GENERIC_TITLE)
     {   // Zelda release variants (not used by the generic Clustertruck profile; the start screen's PLAY ‹ › switches them), another one added from its folder, one put
         // aside removed (a tap, then a confirmation)
         static std::string confirm_rm;
@@ -1722,6 +1722,7 @@ static void prelaunch_tab(float sc) {
 #endif
     ImGui::Spacing();
     ImGui::Spacing();
+#ifndef CLUSTERTRUCK_GENERIC_TITLE
     heading("Game font");
     import_fonts();
     bool fs = have_font(FONT_STD, 4), fe = have_font(FONT_EXT, 2);
@@ -1744,6 +1745,7 @@ static void prelaunch_tab(float sc) {
         ImGui::SameLine();
         if (ImGui::Button(tr("Use substitute font"))) remove_fonts();
     }
+#endif  // !CLUSTERTRUCK_GENERIC_TITLE
 }
 
 extern "C" void launcher_run(const char *root) {
@@ -1986,7 +1988,7 @@ extern "C" void launcher_run(const char *root) {
             ImGui::SetCursorPos(ImVec2(x0, 120 * s));
             ImGui::PushFont(g_font_title);
             if (page == MAIN) {  // gold to orange, shadowed (not behind the Settings / Game Files windows)
-                const char *t = "Clustertruck Recompiled";
+                const char *t = "Clustertruck Recomp";
                 ImVec2 p = ImGui::GetCursorScreenPos();
                 text_fx(ImGui::GetWindowDrawList(), ImGui::GetFont(), ImGui::GetFontSize(), p, IM_COL32(255, 232, 120, 255),
                         IM_COL32(255, 138, 48, 255), t, 3 * s);
@@ -2325,17 +2327,17 @@ extern "C" void launcher_run(const char *root) {
                     dl->AddLine(ImVec2(x, cy), ImVec2(x + u * 0.35f, cy + u * 0.35f), g, fs * 0.11f);
                     dl->AddLine(ImVec2(x + u * 0.35f, cy + u * 0.35f), ImVec2(x + u, cy - u * 0.4f), g, fs * 0.11f);
                 };
-                std::string src_d = tr("The folder with your own game folders (exefs/romfs) of The Legend of Zelda: Link's "
-                                       "Awakening for Nintendo Switch. The game isn't included with Clustertruck Recomp.");
+                std::string src_d = tr("Choose your own Clustertruck Nintendo Switch dump: a folder containing exefs/ and, if available, romfs/. "
+                                       "XCI/NSP packages must be extracted with NxDump first. The game is not included.");
                 if (!src.empty()) src_d += std::string(tr("\n\nChosen: ")) + src;
                 // the step that's running / its result, under the rows and in the Set up row's explanation
                 const std::string &job_line = job;
-                std::string ex_d = tr("Copies the game files Clustertruck Recomp needs and recompiles the game from them. This only "
-                                      "needs to be done once and may take a while. Your own files aren't changed.");
+                std::string ex_d = tr("Copies the Clustertruck dump and recompiles the supported executable modules for Android. "
+                                      "This can take a while. Your original files are not changed. A successful code build does not mean "
+                                      "the game can boot yet.");
 #ifdef __ANDROID__
                 if (native_wanted())
-                    ex_d = tr("Copies the game files Clustertruck Recomp needs (native game code: nothing to build). Your own files "
-                              "aren't changed.");
+                    ex_d = tr("The Clustertruck generic recompilation profile builds its own native code from the Switch executable.");
 #endif
                 if (!job.empty()) ex_d += "\n\n" + std::string(tr(job.c_str())) + (job_hint.empty() ? "" : ".\n" + std::string(tr(job_hint.c_str())));
 
@@ -2349,8 +2351,8 @@ extern "C" void launcher_run(const char *root) {
                 opt_begin("##files", sc);
                 if (!ready) {
                     opt_section("Your copy of the game");
-#ifdef __ANDROID__
-                    {   // how the game's code runs - chosen before the folder (picking it sets the game up at once):
+#if defined(__ANDROID__) && !defined(CLUSTERTRUCK_GENERIC_TITLE)
+                    {   // Native Switch code mode is not offered for generic Clustertruck builds (picking it sets the game up at once):
                         // built from the files (recompiled) or the game's own on the CPU (native: no build; runtime/native.c)
                         static const char *const modes[] = {"Recompiled", "Native (experimental)"};
                         int m = g_settings.native_code ? 1 : 0;
@@ -2413,7 +2415,7 @@ extern "C" void launcher_run(const char *root) {
                     if (files_gb < 0) files_gb = rt_game_files_size(g_root.c_str()) / 1e9;
                     char gb[32];
                     snprintf(gb, sizeof gb, "%.1f GB", files_gb);
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(CLUSTERTRUCK_GENERIC_TITLE)
                     {   // the releases installed (the start screen's PLAY ‹ › switches them), another one added from its
                         // folder, one put aside removed (a tap, then a confirmation)
                         static std::string confirm_rm;
