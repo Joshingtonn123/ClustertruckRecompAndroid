@@ -1,4 +1,4 @@
-// LAS Recomp on Android: SDL's activity runs the runtime (libmain.so, runtime/main.c). Before the native code starts
+// Clustertruck Recomp on Android: SDL's activity runs the runtime (libmain.so, runtime/main.c). Before the native code starts
 // this sets up what the desktop finds next to its executable (runtime/platform/android.c, runtime/paths.c):
 // - the shipped resources (assets/res: the start screen's font, the icon) copied to <internal files>/res;
 // - the Vulkan driver: the first driver in <external files>/drivers (a .so, or an adrenotools .zip: Turnip), copied to
@@ -11,7 +11,7 @@
 //   (libpymain.so, libzig.so) are in nativeLibraryDir;
 // - the system's pickers for the start screen (runtime/ui/launcher.mm): the game files folder (exefs/ and romfs/ are
 //   found in it and copied to <external files>/extracted) and the Vulkan driver (a .zip copied to the drivers folder).
-// The data root (game files, saves, settings) is <external files>: /sdcard/Android/data/com.lasrecomp.android/files.
+// The data root (game files, saves, settings) is <external files>: /sdcard/Android/data/com.clustertruck.recomp/files.
 // While in front it reports the battery and thermal state once a second for the performance overlay
 // (runtime/ui/perf_overlay.mm): apps can't read those in /sys.
 package com.lasrecomp;
@@ -53,7 +53,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public class LASRecompActivity extends SDLActivity {
-    private static final String TAG = "LASRecomp";
+    private static final String TAG = "ClustertruckRecomp";
 
     private final Handler stats = new Handler(Looper.getMainLooper());
     private final Runnable report = new Runnable() {
@@ -132,7 +132,7 @@ public class LASRecompActivity extends SDLActivity {
             setenv("LARECOMP_VK_DRIVER", driver != null ? driver.getAbsolutePath() : "");
             // testing: the runtime's LARECOMP_* switches from the launch intent, separated by commas (adb shell drops
             // the quotes around spaces), e.g. LARECOMP_VK_DRIVER= is the system driver:
-            // adb shell am start -n com.lasrecomp.android/com.lasrecomp.LASRecompActivity --es env LARECOMP_NO_LAUNCHER=1,LARECOMP_VK_DRIVER=
+            // adb shell am start -n com.clustertruck.recomp/com.lasrecomp.LASRecompActivity --es env LARECOMP_NO_LAUNCHER=1,LARECOMP_VK_DRIVER=
             String env = getIntent() != null ? getIntent().getStringExtra("env") : null;
             if (env != null) {  // (a piece without '=' continues the previous value: LARECOMP_GPUPROF_AT=1500,1750)
                 String name = null, value = null;
@@ -320,7 +320,7 @@ public class LASRecompActivity extends SDLActivity {
         launch.addCategory(Intent.CATEGORY_LAUNCHER);
         launch.setClassName("com.nxdump", "com.nxdump.MainActivity");
         try {
-            getSharedPreferences("lasrecomp", MODE_PRIVATE).edit()
+            getSharedPreferences("clustertruck", MODE_PRIVATE).edit()
                 .putString(PREF_PENDING_PACKAGE_IMPORT, format).apply();
             startActivity(launch);
         } catch (Exception e) {
@@ -383,7 +383,7 @@ public class LASRecompActivity extends SDLActivity {
                     self.startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
                 }
             });
-            nativeImportFailure("Allow LAS Recomp to access all files (the page Android just opened), then choose the folder again.");
+            nativeImportFailure("Allow Clustertruck Recomp to access all files (the page Android just opened), then choose the folder again.");
             return;
         }
         pickGameFolder();
@@ -528,7 +528,7 @@ public class LASRecompActivity extends SDLActivity {
     // ---- the log file (Saves & files > Driver compatibility, runtime/platform/android.c) goes to a folder the player
     // picks (Android keeps Android/data/ out of reach of file managers): lasrecomp-log.txt, the run before's kept as
     // lasrecomp-log-previous.txt, both openable on the phone and sendable with a bug report
-    private static final String LOG_NAME = "lasrecomp-log.txt", LOG_PREVIOUS = "lasrecomp-log-previous.txt";
+    private static final String LOG_NAME = "clustertruck-log.txt", LOG_PREVIOUS = "clustertruck-log-previous.txt";
 
     public static void pickLogFolder() {
         self.runOnUiThread(() -> {
@@ -558,7 +558,7 @@ public class LASRecompActivity extends SDLActivity {
         }
     }
 
-    // The folder's name for the settings page ("Download/LASRecomp"); "" with none
+    // The folder's name for the settings page ("Download/Clustertruck"); "" with none
     public static String logFolderName() {
         Uri tree = logTree();
         if (tree == null) return "";
@@ -691,7 +691,7 @@ public class LASRecompActivity extends SDLActivity {
     // The app icon's long-press shortcut (res/xml/shortcuts.xml): the system driver, settings out of reach or not - a
     // custom driver that draws garbage (Turnip_v26.3.0-R6 on an Adreno 830: stripes, the menus unreadable) or crashes.
     // Before the driver loads when it starts the app; a running one (a single instance) drops it and starts again.
-    static final String SYSTEM_DRIVER = "com.lasrecomp.action.SYSTEM_DRIVER";
+    static final String SYSTEM_DRIVER = "com.clustertruck.recomp.action.SYSTEM_DRIVER";
 
     @Override
     protected void onNewIntent(Intent intent) {
