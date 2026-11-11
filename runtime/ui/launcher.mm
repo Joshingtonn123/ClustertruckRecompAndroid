@@ -240,7 +240,7 @@ static void set_job(const std::string &s, bool failed = false, const std::string
 enum { FAIL_NOT_FOUND = 1, FAIL_UNUSABLE, FAIL_COPY, FAIL_VERSION, FAIL_MISSING, FAIL_BUILD };
 static void set_failure(int k) {
     static const char *const head[] = {"", "No game files found in that folder", "Those files can't be used",
-                                       "Setup didn't finish", "Wrong version of the game", "Game files incomplete",
+                                       "Setup didn't finish", "Not a valid Clustertruck Switch dump", "Game files incomplete",
                                        "The game code didn't build"};
     static const char *const hint[] = {
         "",
