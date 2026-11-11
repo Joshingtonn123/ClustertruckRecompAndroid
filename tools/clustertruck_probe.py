@@ -177,7 +177,7 @@ def classify_asset_magic(prefix: bytes) -> str:
         (b"OggS", "OggS"),
         (b"RIFF", "RIFF"),
         (b"fLaC", "FLAC"),
-        (b"PK\\x03\\x04", "ZIP"),
+        (bytes((0x50, 0x4B, 0x03, 0x04)), "ZIP"),
     )
     for magic, label in signatures:
         if prefix.startswith(magic):
@@ -199,6 +199,7 @@ def scan_directory(root: Path, max_files: int, max_nso: int) -> dict[str, Any]:
     romfs_total_bytes = 0
     romfs_extensions: Counter[str] = Counter()
     romfs_signatures: Counter[str] = Counter()
+    romfs_signature_reads = 0
     romfs_samples: list[str] = []
     truncated = False
 
@@ -232,7 +233,8 @@ def scan_directory(root: Path, max_files: int, max_nso: int) -> dict[str, Any]:
                 romfs_extensions[suffix or "(no extension)"] += 1
                 if len(romfs_samples) < 20:
                     romfs_samples.append(rel)
-                if sum(romfs_signatures.values()) < 32:
+                if romfs_signature_reads < 32:
+                    romfs_signature_reads += 1
                     signature = classify_asset_magic(read_prefix(path, 16))
                     if signature != "other":
                         romfs_signatures[signature] += 1

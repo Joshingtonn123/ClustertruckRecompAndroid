@@ -61,8 +61,8 @@ class ClustertruckProbeTests(unittest.TestCase):
             (root / "exefs").mkdir()
             romfs = root / "romfs"
             (romfs / "StreamingAssets").mkdir(parents=True)
-            (romfs / "StreamingAssets" / "level.bundle").write_bytes(b"UnityFS" + b"\\0" * 25)
-            (romfs / "music.ogg").write_bytes(b"OggS" + b"\\0" * 12)
+            (romfs / "StreamingAssets" / "level.bundle").write_bytes(b"UnityFS" + bytes(25))
+            (romfs / "music.ogg").write_bytes(b"OggS" + bytes(12))
             report = probe.scan_directory(root, 100, 8)
 
         self.assertTrue(report["exefs_found"])
