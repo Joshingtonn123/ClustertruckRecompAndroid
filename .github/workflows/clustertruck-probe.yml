@@ -71,10 +71,21 @@ jobs:
           sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.16248370" "cmake;3.30.4"
           echo "ANDROID_NDK=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_LINUX=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
-      - name: Install host build tools
+      - name: Install host build tools when missing
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build pkg-config build-essential autoconf automake libtool
+          missing=0
+          for tool in cc make pkg-config autoconf automake libtoolize; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              echo "Missing host tool: $tool"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            sudo apt-get update
+            sudo apt-get install -y pkg-config build-essential autoconf automake libtool
+          else
+            echo "All required host build tools are already installed; skipping apt."
+          fi
       - name: Build Android runtime dependencies
         env:
           BUILD_JOBS: 2
