@@ -1,7 +1,7 @@
 # lasgame.so for Android: the game code generated from the player's own game files with gen.py --dyn-base
 # (android/build_gamelib.sh runs the generator and this build). The runtime functions it calls are libmain.so's: it
 # names libmain.so as a dependency, which is how Android's linker finds them when the runtime loads it (dlopen).
-#   LAS_GEN: the generated code (sdk/, main/)   LAS_LIBMAIN: the app's libmain.so (to link against)
+#   LAS_GEN: the generated code (sdk/, main/, optional subsdk0/)   LAS_LIBMAIN: the app's libmain.so (to link against)
 cmake_minimum_required(VERSION 3.22)
 project(lasgame C)
 
@@ -10,7 +10,7 @@ get_filename_component(R ${R} ABSOLUTE)
 include(${R}/android/gamelib_id.cmake)
 message(STATUS "GAMELIB_ID ${GAMELIB_ID}")
 
-file(GLOB GEN_SRC ${LAS_GEN}/main/*.c ${LAS_GEN}/sdk/*.c)
+file(GLOB GEN_SRC ${LAS_GEN}/main/*.c ${LAS_GEN}/sdk/*.c ${LAS_GEN}/subsdk0/*.c)
 list(LENGTH GEN_SRC n)
 if(n EQUAL 0)
     message(FATAL_ERROR "no generated code in ${LAS_GEN}")

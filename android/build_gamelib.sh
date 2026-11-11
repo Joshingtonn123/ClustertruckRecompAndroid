@@ -25,6 +25,14 @@ if [ ! -f "$GEN/main/main_table.c" ] || [ ! -f "$GEN/main/main_build_id.txt" ] |
     (cd tools && "../$PY" gen.py main "$EXEFS/main" 0x7000000000 "$GEN/main" --generic --simd asm --dyn-base)
 fi
 
+if [ -f "$EXEFS/subsdk0" ]; then
+    if [ ! -f "$GEN/subsdk0/subsdk0_table.c" ]; then
+        (cd tools && "../$PY" gen.py subsdk0 "$EXEFS/subsdk0" 0x7010000000 "$GEN/subsdk0" --hle ../runtime/hle/hle_symbols.txt --simd asm --dyn-base)
+    fi
+else
+    rm -rf "$GEN/subsdk0"
+fi
+
 "$CMAKE_DIR/cmake$EXE" -S "$R/android/gamelib" -B "$W" -G Ninja -DCMAKE_MAKE_PROGRAM="$CMAKE_DIR/ninja$EXE" \
     -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-30 \
     -DCMAKE_BUILD_TYPE=Release -DLAS_GEN="$GEN" -DLAS_LIBMAIN="$LIBMAIN"

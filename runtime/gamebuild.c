@@ -476,11 +476,16 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
     LOG("[gamebuild] generator %s%s%s, compiler %s%s, %d jobs\n", t.gen, t.gen_script[0] ? " " : "", t.gen_script,
         t.cc, t.zig ? " cc" : "", o->jobs);
 
-    // 1. the generator, both modules at once; their finished files are compiled while it goes on
-    Gen gens[2] = {{.name = "main"}, {.name = "sdk"}};
-    static const char *const base[2] = {"0x7000000000", "0x7004000000"};
+    // 1. generate main and sdk, plus subsdk0 when the extracted title contains it.
+    // Finished C chunks are compiled while the other generators continue.
+    Gen gens[3] = {{.name = "main"}, {.name = "sdk"}, {.name = "subsdk0"}};
+    static const char *const base[3] = {"0x7000000000", "0x7004000000", "0x7010000000"};
+    char subsdk_path[1100];
+    snprintf(subsdk_path, sizeof subsdk_path, "%s" SEP "exefs" SEP "subsdk0", game_dir);
+    int gen_count = file_exists(subsdk_path) ? 3 : 2;
+    if (gen_count == 2) LOG("[gamebuild] exefs/subsdk0 absent; building main + sdk only\n");
     bool ok = true;
-    for (int i = 0; i < 2 && ok; i++) {
+    for (int i = 0; i < gen_count && ok; i++) {
         Gen *g = &gens[i];
         g->exit = -1;
         snprintf(g->log, sizeof g->log, "%s" SEP "gen_%s.log", work, g->name);
@@ -494,7 +499,7 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
         add(&a, nso);
         add(&a, base[i]);
         add(&a, g->out);
-        if (i == 1) { add(&a, "--hle"); add(&a, t.hle); }
+        if (i > 0) { add(&a, "--hle"); add(&a, t.hle); }
 #ifdef __ANDROID__
         if (i == 0) add(&a, "--generic");  // Clustertruck: main has no Zelda build-ID or patch profile
         add(&a, "--simd"); add(&a, "asm"); add(&a, "--dyn-base");  // (as android/build_gamelib.sh: the window moves)
@@ -505,8 +510,8 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
     }
 
     Units units = {0};
-    int queued[2] = {0, 0};  // chunk files of each module put in units so far
-    bool tables[2] = {false, false};
+    int queued[3] = {0, 0, 0};  // chunk files of each module put in units so far
+    bool tables[3] = {false, false, false};
     int next = 0, jobs = o->jobs < 1 ? 1 : o->jobs > 64 ? 64 : o->jobs;
     struct { PlatProc p; int unit; } run[64];
     int nrun = 0;
@@ -520,7 +525,7 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
         bool gens_done = true;
         double gen_frac = 0;
         unsigned long long written = 0;
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < gen_count; i++) {
             Gen *g = &gens[i];
             if (g->exit < 0) {
                 read_gen_log(g);
@@ -551,7 +556,8 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
                 add_unit(&units, src, work, stem);
                 tables[i] = true;
             }
-            gen_frac += g->exit == 0 ? 0.5 : g->n ? 0.5 * (double)g->ci / (double)g->n : 0;
+            double share = 1.0 / (double)gen_count;
+            gen_frac += g->exit == 0 ? share : g->n ? share * (double)g->ci / (double)g->n : 0;
         }
         if (!ok) break;
         for (int k = 0; k < units.n; k++) written += units.u[k].bytes;
@@ -605,7 +611,7 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
         sleep_ms(50);
     }
     for (int k = 0; k < nrun; k++) stop(run[k].p);  // (a failure: the rest is of no use - the failure shows at once)
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < gen_count; i++)
         if (gens[i].p && gens[i].exit < 0) stop(gens[i].p);
 
     // 2. link
