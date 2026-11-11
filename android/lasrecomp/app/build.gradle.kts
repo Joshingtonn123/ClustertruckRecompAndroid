@@ -29,7 +29,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += "-DLAS_GEN_DIR=${gen.get().asFile.resolve("inc").absolutePath.replace('\\', '/')}"
-                arguments += "-DLAS_APP_VERSION=$versionName"  // (the start screen shows it: launcher.mm)
+                arguments += "-DCLUSTERTRUCK_APP_VERSION=$versionName"  // (the start screen shows it: launcher.mm)
             }
         }
     }
@@ -89,10 +89,6 @@ android {
 // What the Clustertruck Android build needs from the repository: the SMAA shader as a C string (as the Makefile makes
 // smaa_hlsl.inc), the prebuilt libraries, and the shipped fonts. Its launcher background and icon are Clustertruck-specific.
 // runtime/game_addresses: the game versions and their patch tables, read by the generator (tools/game_addresses.py)
-val gameTables = listOf(repo.resolve("runtime/game_addresses/versions.h")) +
-    (repo.resolve("runtime/game_addresses").listFiles() ?: arrayOf())
-        .filter { it.name.startsWith("patches_v") && it.name.endsWith(".h") }.sortedBy { it.name }
-
 val prepareClustertruck by tasks.registering {
     val smaa = repo.resolve("third_party/smaa/SMAA.hlsl")
     val font = repo.resolve("third_party/fonts/Baloo2/Baloo2-SemiBold.ttf")
@@ -104,8 +100,6 @@ val prepareClustertruck by tasks.registering {
                         "tools/simd_c.py", "tools/game_addresses.py", "tools/rando/patch_variants.json", "tools/gamelib_entry.c",
                         "runtime/cpu.h", "runtime/simd.h", "runtime/simd_fp.h", "runtime/gamelib.h",
                         "runtime/hle/hle_symbols.txt").map { repo.resolve(it) })
-    inputs.files(gameTables)
-    if (repo.resolve("tools/hot_functions.txt").exists()) inputs.file(repo.resolve("tools/hot_functions.txt"))
     outputs.dir(gen)
     doLast {
         val out = gen.get().asFile
@@ -133,18 +127,12 @@ val prepareClustertruck by tasks.registering {
             g.resolve("python/lib").copyRecursively(a.resolve("python/lib"), overwrite = true)
             g.resolve("site").copyRecursively(a.resolve("site"), overwrite = true)
             g.resolve("zig/lib").copyRecursively(a.resolve("zig/lib"), overwrite = true)
-            for (n in listOf("gen.py", "lifter.py", "analyze.py", "nso.py", "passes.py", "patches.py", "simd_c.py", "game_addresses.py"))
+            for (n in listOf("gen.py", "lifter.py", "analyze.py", "nso.py", "passes.py", "simd_c.py"))
                 repo.resolve("tools/$n").copyTo(a.resolve("tools/$n"), overwrite = true)
-            // (every game version's patch table: gen.py picks one by the main build ID, tools/game_addresses.py)
-            for (f in gameTables) f.copyTo(a.resolve("runtime/game_addresses/${f.name}"), overwrite = true)
-            repo.resolve("tools/rando/patch_variants.json").copyTo(a.resolve("tools/rando/patch_variants.json"), overwrite = true)
             for (n in listOf("cpu.h", "simd.h", "simd_fp.h", "gamelib.h"))
                 repo.resolve("runtime/$n").copyTo(a.resolve("gamelib-src/$n"), overwrite = true)
             repo.resolve("tools/gamelib_entry.c").copyTo(a.resolve("gamelib-src/gamelib_entry.c"), overwrite = true)
             repo.resolve("runtime/hle/hle_symbols.txt").copyTo(a.resolve("gamelib-src/hle_symbols.txt"), overwrite = true)
-            // (runtime/gamebuild.c hot / cold: only these functions at -O1; not part of the game code's id)
-            val hot = repo.resolve("tools/hot_functions.txt")
-            if (hot.exists()) hot.copyTo(a.resolve("gamelib-src/hot_functions.txt"), overwrite = true)
             val digest = MessageDigest.getInstance("SHA-256")
             val buffer = ByteArray(65536)
             for (f in a.walkTopDown().filter { it.isFile }.sortedBy { it.relativeTo(a).invariantSeparatorsPath }) {
