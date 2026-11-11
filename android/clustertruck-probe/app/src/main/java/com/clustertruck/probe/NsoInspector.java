@@ -29,22 +29,47 @@ final class NsoInspector {
 
     private NsoInspector() {}
 
+    static final class ModuleReport {
+        final String path;
+        String text = "";
+        boolean metadataParsed;
+        final List<String> imports = new ArrayList<>();
+        final LinkedHashSet<String> exports = new LinkedHashSet<>();
+        final LinkedHashSet<String> neededLibraries = new LinkedHashSet<>();
+        final Map<Integer, Integer> relocationTypes = new TreeMap<>();
+
+        ModuleReport(String path) { this.path = path; }
+
+        String moduleName() {
+            int slash = path.lastIndexOf('/');
+            return slash >= 0 ? path.substring(slash + 1) : path;
+        }
+    }
+
     static String inspect(InputStream input, String path, long reportedSize) throws IOException {
+        ModuleReport report = inspectDetailed(input, path, reportedSize);
+        return report == null ? null : report.text;
+    }
+
+    static ModuleReport inspectDetailed(InputStream input, String path, long reportedSize) throws IOException {
         byte[] header = readAtMost(input, HEADER_SIZE);
         if (header.length < HEADER_SIZE || !asciiAt(header, 0, "NSO0")) return null;
+        ModuleReport report = new ModuleReport(path);
         String summary = headerSummary(header, path);
 
         byte[] image = readModuleImage(input, header, reportedSize);
         if (image == null) {
-            return summary + "\n    Dynamic metadata: skipped (NSO segment offsets/sizes exceed the bounded scan limits or the reported file size is inconsistent)";
+            report.text = summary + "\n    Dynamic metadata: skipped (NSO segment offsets/sizes exceed the bounded scan limits or the reported file size is inconsistent)";
+            return report;
         }
         try {
-            return summary + "\n" + dynamicSummary(image);
+            report.text = summary + "\n" + dynamicSummary(image, report);
         } catch (Exception error) {
             String message = error.getMessage();
             if (message == null || message.isEmpty()) message = error.getClass().getSimpleName();
-            return summary + "\n    Dynamic metadata: unavailable (" + message + ")";
+            report.text = summary + "\n    Dynamic metadata: unavailable (" + message + ")";
         }
+        return report;
     }
 
     private static String headerSummary(byte[] h, String path) throws IOException {
@@ -68,7 +93,7 @@ final class NsoInspector {
         return out.toString();
     }
 
-    private static String dynamicSummary(byte[] image) throws IOException {
+    private static String dynamicSummary(byte[] image, ModuleReport report) throws IOException {
         long mod0 = u32(image, 4);
         requireRange(image.length, mod0, 8, "MOD0 header");
         if (!asciiAt(image, (int) mod0, "MOD0")) throw new IOException("MOD0 signature not found");
@@ -107,7 +132,10 @@ final class NsoInspector {
         LinkedHashSet<String> libraries = new LinkedHashSet<>();
         for (long offset : neededOffsets) {
             String name = cString(image, strtab + offset, stringEnd);
-            if (!name.isEmpty()) libraries.add(name);
+            if (!name.isEmpty()) {
+                libraries.add(name);
+                report.neededLibraries.add(name);
+            }
         }
 
         int imports = 0, exports = 0;
@@ -127,9 +155,11 @@ final class NsoInspector {
                 if (name.isEmpty()) continue;
                 if (section == 0) {
                     imports++;
+                    report.imports.add(name);
                     if (importNames.size() < MAX_IMPORT_NAMES) importNames.add(name);
                 } else {
                     exports++;
+                    report.exports.add(name);
                     if ("_ZN2nn4init5StartEmmPFvvES2_".equals(name)) startupExportFound = true;
                 }
             }
@@ -144,6 +174,7 @@ final class NsoInspector {
             for (int i = 0; i < (int) count; i++) {
                 int type = (int) i64(image, (int) rela + i * 24 + 8);
                 relocationTypes.put(type, relocationTypes.getOrDefault(type, 0) + 1);
+                report.relocationTypes.put(type, report.relocationTypes.getOrDefault(type, 0) + 1);
                 relocationCount++;
             }
         }
@@ -155,10 +186,12 @@ final class NsoInspector {
             for (int i = 0; i < (int) count; i++) {
                 int type = (int) i64(image, (int) jmprel + i * 24 + 8);
                 relocationTypes.put(type, relocationTypes.getOrDefault(type, 0) + 1);
+                report.relocationTypes.put(type, report.relocationTypes.getOrDefault(type, 0) + 1);
                 relocationCount++;
             }
         }
 
+        report.metadataParsed = true;
         StringBuilder out = new StringBuilder("    Dynamic metadata: ")
                 .append(imports).append(" imports, ").append(exports).append(" exports, ")
                 .append(relocationCount).append(" relocations; nn::init::Start export: ")
@@ -172,17 +205,94 @@ final class NsoInspector {
         if (!relocationTypes.isEmpty()) {
             out.append("\n    Relocation types: ");
             boolean first = true;
+            boolean allSupported = true;
             for (Map.Entry<Integer, Integer> entry : relocationTypes.entrySet()) {
                 if (!first) out.append(", ");
                 out.append("0x").append(Integer.toHexString(entry.getKey())).append(" × ").append(entry.getValue());
                 first = false;
+                if (!supportsRuntimeRelocation(entry.getKey())) allSupported = false;
             }
+            out.append("\n    Current loader relocation coverage: ")
+                    .append(allSupported ? "all observed types are implemented" : "UNSUPPORTED types observed");
         }
         if (!importNames.isEmpty()) {
             out.append("\n    Imported symbol sample (up to ").append(MAX_IMPORT_NAMES).append("): ");
             appendJoined(out, importNames);
         }
         return out.toString();
+    }
+
+    static boolean supportsRuntimeRelocation(int type) {
+        return type == 257 || type == 1025 || type == 1026 || type == 1027;
+    }
+
+    static String linkAudit(List<ModuleReport> modules) {
+        Map<String, LinkedHashSet<String>> providers = new TreeMap<>();
+        for (ModuleReport module : modules) {
+            String name = module.moduleName();
+            if (!isLoadedByCurrentRuntime(name) || !module.metadataParsed) continue;
+            for (String symbol : module.exports)
+                providers.computeIfAbsent(symbol, ignored -> new LinkedHashSet<>()).add(name);
+        }
+
+        StringBuilder out = new StringBuilder("Cross-module import/export audit:\n");
+        out.append("  Loader comparison includes main, sdk and subsdk0 only; rtld and additional subsdk modules are not mapped by the current generic loader.\n");
+        for (ModuleReport module : modules) {
+            String name = module.moduleName();
+            if (!isLoadedByCurrentRuntime(name)) continue;
+            if (!module.metadataParsed) {
+                out.append("  ").append(name).append(": dynamic symbols unavailable; no link audit possible.\n");
+                continue;
+            }
+            int matched = 0;
+            List<String> unmatched = new ArrayList<>();
+            Map<String, Integer> groups = new TreeMap<>();
+            for (String symbol : module.imports) {
+                if (providers.containsKey(symbol)) {
+                    matched++;
+                } else {
+                    unmatched.add(symbol);
+                    String group = classifyImport(symbol);
+                    groups.put(group, groups.getOrDefault(group, 0) + 1);
+                }
+            }
+            out.append("  ").append(name).append(": ").append(module.imports.size())
+                    .append(" imports; ").append(matched).append(" found in mapped module exports; ")
+                    .append(unmatched.size()).append(" not found in those exports.\n");
+            if (!groups.isEmpty()) {
+                out.append("    Unmatched import groups (heuristic): ");
+                appendJoined(out, formatCounts(groups));
+                out.append('\n');
+                out.append("    Unmatched symbol examples: ");
+                int limit = Math.min(18, unmatched.size());
+                appendJoined(out, unmatched.subList(0, limit));
+                if (unmatched.size() > limit) out.append(", ...");
+                out.append('\n');
+            }
+        }
+        out.append("  Important: an import not found in another mapped module may still be supplied by an Android system library or an implemented HLE function; this audit does not label it missing.");
+        return out.toString();
+    }
+
+    private static boolean isLoadedByCurrentRuntime(String name) {
+        return "main".equals(name) || "sdk".equals(name) || "subsdk0".equals(name);
+    }
+
+    private static String classifyImport(String symbol) {
+        if (symbol.startsWith("_ZN7android") || symbol.startsWith("ANative") ||
+                symbol.startsWith("android")) return "Android framework/native";
+        if (symbol.startsWith("Nv") || symbol.startsWith("nvgr_") ||
+                symbol.startsWith("multimedia_")) return "NVIDIA/Tegra multimedia";
+        if (symbol.startsWith("_ZN2nn") || symbol.startsWith("nn")) return "Nintendo SDK/services";
+        if (symbol.startsWith("_Z") || symbol.startsWith("__")) return "C/C++ ABI or runtime";
+        return "Other/system";
+    }
+
+    private static List<String> formatCounts(Map<String, Integer> counts) {
+        List<String> values = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : counts.entrySet())
+            values.add(entry.getKey() + "=" + entry.getValue());
+        return values;
     }
 
     private static void appendJoined(StringBuilder out, Iterable<String> values) {
