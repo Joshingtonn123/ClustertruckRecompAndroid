@@ -18,7 +18,7 @@ The `clustertruck-dev` branch now contains:
 - A Switch-only read-only probe for visible XCI/NSP directory metadata, NSO module headers/build IDs, and `main.npdm`.
 - The generic runtime now generates and links optional `subsdk0` code alongside `main` and `sdk`; its exports are loaded before relocations so other modules can resolve symbols from it. Other `subsdk*` modules remain unsupported.
 - The Android dump probe inventories an extracted `romfs/` tree (file count, total bytes, extensions and a small signature sample) without unpacking or copying its assets. Its NSO inspector reads segment ranges in file-offset order, skipping large alignment/padding gaps while keeping per-segment and decompressed-image safety limits.
-- CI tests, a diagnostic app build, and a full Android app build job that validates the code-generation importer and native runtime build.
+- CI tests and a separate Clustertruck dump-probe diagnostic app build. The LAS-based full-app packaging job is intentionally excluded from this Clustertruck workflow.
 
 The generic generator is tested with a synthetic NSO containing a function that returns. This proves the generic generator path can emit C for an unknown build ID; it does not prove the real Clustertruck executable is supported. The actual Switch executable payloads have not yet been supplied for direct code-generation testing. The generic loader now maps `main`, `sdk`, and optional `subsdk0`, but the real module startup order, unresolved imports, Unity-facing services, NVN behavior and any additional ExeFS modules remain unverified.
 
@@ -56,4 +56,4 @@ We still need non-sensitive metadata from the actual Switch build:
 
 All Clustertruck experiments stay on `clustertruck-dev`. The upstream-derived `main` branch is intentionally untouched.
 
-The diagnostic and full-application build artifacts are temporary GitHub Actions artifacts. Open the [Clustertruck workflow runs](https://github.com/Joshingtonn123/ClustertruckRecompAndroid/actions/workflows/clustertruck-probe.yml?query=branch%3Aclustertruck-dev) to access recent builds. A full-app development APK, once CI succeeds, is for testing the ExeFS-only code-generation path; it is **not** a playable Clustertruck release.
+The dump-probe APK and test outputs are temporary GitHub Actions artifacts. Open the [Clustertruck workflow runs](https://github.com/Joshingtonn123/ClustertruckRecompAndroid/actions/workflows/clustertruck-probe.yml?query=branch%3Aclustertruck-dev) to access recent builds. The separate probe APK only inspects extracted files; it is **not** a recompilation runtime or a playable Clustertruck release. The LAS-based full-app build is deliberately not part of this workflow.
