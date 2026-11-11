@@ -75,7 +75,7 @@ public final class NsoInspectorTest {
         assertTrue(report.imports.contains("nn::TestImport"));
         assertTrue(report.exports.contains(START));
         assertEquals(1L, report.packedRelativeRelocationCount);
-        assertTrue(report.text, report.text.contains("GNU hash"));
+        assertTrue(report.text, report.text.contains("Symbol hash table: GNU"));
         assertTrue(report.text, report.text.contains("DT_RELR): 1 targets"));
         assertTrue(NsoInspector.supportsPackedRelativeRelocations());
     }
