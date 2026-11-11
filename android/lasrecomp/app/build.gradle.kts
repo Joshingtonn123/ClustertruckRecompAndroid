@@ -7,10 +7,10 @@ plugins {
 
 val repo: File = rootDir.resolve("../..").canonicalFile
 val deps: File = repo.resolve("android/deps/out")  // android/deps/build_deps.sh
-val gen = layout.buildDirectory.dir("generated/lasrecomp")
+val gen = layout.buildDirectory.dir("generated/clustertruck")
 // The release key: outside the repository, in ~/.lasrecomp/keystore.properties (storeFile, storePassword, keyAlias,
 // keyPassword); without it, release builds are signed with the debug key
-val releaseKey: File = File(System.getProperty("user.home"), ".lasrecomp/keystore.properties")
+val releaseKey: File = File(System.getProperty("user.home"), ".clustertruck-recomp/keystore.properties")
 
 android {
     namespace = "com.lasrecomp"
@@ -18,11 +18,11 @@ android {
     ndkVersion = "30.0.16248370"
 
     defaultConfig {
-        applicationId = "com.lasrecomp.android"
+        applicationId = "com.clustertruck.recomp"
         minSdk = 30
         targetSdk = 36
-        versionCode = 26
-        versionName = "0.5.10"
+        versionCode = 1
+        versionName = "0.1.0"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -86,20 +86,18 @@ android {
     }
 }
 
-// What the native build and the APK need from the repository: the SMAA shader as a C string (as the Makefile makes
-// smaa_hlsl.inc), the prebuilt libraries, and the shipped resources (the start screen's font, the icon).
+// What the Clustertruck Android build needs from the repository: the SMAA shader as a C string (as the Makefile makes
+// smaa_hlsl.inc), the prebuilt libraries, and the shipped fonts. Its launcher background and icon are Clustertruck-specific.
 // runtime/game_addresses: the game versions and their patch tables, read by the generator (tools/game_addresses.py)
 val gameTables = listOf(repo.resolve("runtime/game_addresses/versions.h")) +
     (repo.resolve("runtime/game_addresses").listFiles() ?: arrayOf())
         .filter { it.name.startsWith("patches_v") && it.name.endsWith(".h") }.sortedBy { it.name }
 
-val prepareLasRecomp by tasks.registering {
+val prepareClustertruck by tasks.registering {
     val smaa = repo.resolve("third_party/smaa/SMAA.hlsl")
     val font = repo.resolve("third_party/fonts/Baloo2/Baloo2-SemiBold.ttf")
-    val icon = repo.resolve("docs/icon/android-hero.png")
     val libs = listOf("libSDL3.so", "libshaderc_shared.so", "libavcodec.so", "libavformat.so", "libavutil.so", "libswscale.so")
-    val background = repo.resolve("docs/artwork/android-island.png")
-    inputs.files(smaa, font, icon, background, project.file("build.gradle.kts"))
+    inputs.files(smaa, font, project.file("build.gradle.kts"))
     inputs.files(libs.map { deps.resolve("lib/$it") }.filter { it.exists() })
     if (deps.resolve("gen").exists()) inputs.dir(deps.resolve("gen"))  // (the game code's builder, below)
     inputs.files(listOf("tools/gen.py", "tools/lifter.py", "tools/analyze.py", "tools/nso.py", "tools/passes.py", "tools/patches.py",
@@ -121,9 +119,6 @@ val prepareLasRecomp by tasks.registering {
             if (deps.resolve("lib/$lib").exists()) deps.resolve("lib/$lib").copyTo(out.resolve("jniLibs/arm64-v8a/$lib"), overwrite = true)
         font.copyTo(out.resolve("assets/res/Baloo2-SemiBold.ttf"), overwrite = true)
         deps.resolve("fonts/DejaVuSans.ttf").copyTo(out.resolve("assets/res/DejaVuSans.ttf"), overwrite = true)
-        icon.copyTo(out.resolve("assets/res/icon.png"), overwrite = true)
-        background.copyTo(out.resolve("assets/res/launcher-background.png"), overwrite = true)
-        icon.copyTo(out.resolve("res/mipmap-xxxhdpi/ic_launcher.png"), overwrite = true)
         // the game code's builder (docs/ANDROID-PORT.md, Fase 6; android/deps/build_gen_deps.sh): its programs and
         // libraries as native libraries (Android runs binaries only from nativeLibraryDir), the rest as assets/gen
         // (runtime/gamebuild.c; unpacked by LASRecompActivity)
