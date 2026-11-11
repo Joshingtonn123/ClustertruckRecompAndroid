@@ -8,7 +8,7 @@ plugins {
 val repo: File = rootDir.resolve("../..").canonicalFile
 val deps: File = repo.resolve("android/deps/out")  // android/deps/build_deps.sh
 val gen = layout.buildDirectory.dir("generated/clustertruck")
-// The release key: outside the repository, in ~/.lasrecomp/keystore.properties (storeFile, storePassword, keyAlias,
+// The release key: outside the repository, in ~/.clustertruck-recomp/keystore.properties (storeFile, storePassword, keyAlias,
 // keyPassword); without it, release builds are signed with the debug key
 val releaseKey: File = File(System.getProperty("user.home"), ".clustertruck-recomp/keystore.properties")
 
