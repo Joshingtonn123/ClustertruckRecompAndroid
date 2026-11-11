@@ -1,7 +1,10 @@
 package com.clustertruck.probe;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+
+import java.util.Arrays;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -36,6 +39,36 @@ public final class NsoInspectorTest {
         assertTrue(report, report.contains("Needed libraries: libnn_sdk.so"));
         assertTrue(report, report.contains("nn::TestImport"));
         assertTrue(report, report.contains("0x402 × 1"));
+    }
+
+    @Test
+    public void detailedInspectionRetainsSymbolsAndAuditsCrossModuleExports() throws Exception {
+        byte[] raw = makeNso();
+        NsoInspector.ModuleReport main = NsoInspector.inspectDetailed(
+                new ByteArrayInputStream(raw), "exefs/main", raw.length);
+        assertNotNull(main);
+        assertTrue(main.metadataParsed);
+        assertTrue(main.imports.contains("nn::TestImport"));
+        assertTrue(main.exports.contains(START));
+        assertTrue(main.neededLibraries.contains("libnn_sdk.so"));
+        assertTrue(main.relocationTypes.containsKey(0x402));
+
+        NsoInspector.ModuleReport sdk = new NsoInspector.ModuleReport("exefs/sdk");
+        sdk.metadataParsed = true;
+        sdk.exports.add("nn::TestImport");
+
+        String audit = NsoInspector.linkAudit(Arrays.asList(main, sdk));
+        assertTrue(audit, audit.contains("exefs/main: 1 imports; 1 found in mapped module exports; 0 not found"));
+        assertTrue(audit, audit.contains("main, sdk and subsdk0 only"));
+    }
+
+    @Test
+    public void recognizesTheFourRelocationTypesImplementedByCurrentLoader() {
+        assertTrue(NsoInspector.supportsRuntimeRelocation(0x101));
+        assertTrue(NsoInspector.supportsRuntimeRelocation(0x401));
+        assertTrue(NsoInspector.supportsRuntimeRelocation(0x402));
+        assertTrue(NsoInspector.supportsRuntimeRelocation(0x403));
+        assertFalse(NsoInspector.supportsRuntimeRelocation(0x404));
     }
 
     @Test
