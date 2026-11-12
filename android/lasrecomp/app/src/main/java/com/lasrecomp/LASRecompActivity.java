@@ -931,8 +931,9 @@ public class LASRecompActivity extends SDLActivity {
                 int got = 0;
                 for (int r; got < head.length && (r = in.read(head, got, head.length - got)) > 0; ) got += r;
             }
-            // A non-LAS main build ID is still useful to the generic NSO recompiler. Keep this as an ExeFS-only
-            // import rather than rejecting it or pretending its RomFS can boot in the LAS-specific runtime.
+            // LAS profiles require a known build ID. The Clustertruck Android profile accepts a valid NSO0
+            // header here and uses the generic direct-ARM64 boot path; malformed / unsupported files remain
+            // ExeFS-only for inspection rather than being treated as a bootable game.
             if (!nativeBuildIdOk(head)) compileOnly = true;
             File dataRoot = getExternalFilesDir(null);
             if (dataRoot == null) throw new IOException("App storage is unavailable. Check the phone storage and retry.");
