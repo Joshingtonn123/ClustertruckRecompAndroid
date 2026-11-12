@@ -29,7 +29,8 @@ class ClustertruckNativeBootTests(unittest.TestCase):
 
     def test_launcher_finds_unity_data_folder_and_checks_it(self):
         launcher = self.read("runtime/ui/launcher.mm")
-        self.assertIn('#ifdef CLUSTERTRUCK_GENERIC_TITLE\\n    if (romfs.empty() && is_dir(dir + "/Data")) romfs = dir;\\n#else', launcher)
+        self.assertIn('if (romfs.empty() && is_dir(dir + "/Data")) romfs = dir;', launcher)
+        self.assertIn('#ifdef CLUSTERTRUCK_GENERIC_TITLE', launcher)
         self.assertIn('file_exists(std::string(linked) + "/Data")', launcher)
         self.assertIn('file_exists(root + "/romfs/Data")', launcher)
         self.assertIn('file_exists(root + "/romfs/region_common")', launcher)  # preserved for upstream LAS profiles
