@@ -27,6 +27,20 @@ class ClustertruckNativeBootTests(unittest.TestCase):
         self.assertIn('bool sdk_ok = valid_nso(exefs + "/sdk");', launcher)
         self.assertIn("return main_ok && sdk_ok;", launcher)
 
+    def test_android_saf_import_accepts_clustertruck_nso(self):
+        launcher = self.read("runtime/ui/launcher.mm")
+        self.assertIn('if (env->GetArrayLength(head) < 0x60) return JNI_FALSE;', launcher)
+        self.assertIn('if (memcmp(hdr, "NSO0", 4)) return JNI_FALSE;', launcher)
+        self.assertIn('#ifdef CLUSTERTRUCK_GENERIC_TITLE\n    char build_id[41];', launcher)
+        self.assertIn('generic Clustertruck NSO accepted', launcher)
+        self.assertIn('return JNI_TRUE;', launcher)
+
+    def test_unity_romfs_in_place_and_loose_file_policy(self):
+        launcher = self.read("runtime/ui/launcher.mm")
+        self.assertIn('file_exists(path + "/Data")', launcher)
+        self.assertIn('return rel && *rel;', launcher)
+        self.assertIn('file_exists(path + "/region_common")', launcher)  # LAS behavior remains in its branch
+
     def test_launcher_finds_unity_data_folder_and_checks_it(self):
         launcher = self.read("runtime/ui/launcher.mm")
         self.assertIn('if (romfs.empty() && is_dir(dir + "/Data")) romfs = dir;', launcher)
