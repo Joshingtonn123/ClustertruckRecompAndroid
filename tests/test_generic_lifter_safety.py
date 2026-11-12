@@ -4,14 +4,14 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-from lifter import AsmInsn, Insn, Unsupported, emit_asm_batch
+from lifter import AsmInsn, Unsupported, emit_asm_batch
 
 
 class GenericLifterSafetyTests(unittest.TestCase):
     def test_nzcv_batch_reserves_x16_for_flags(self):
         batch = [
-            Insn("asm", asm=AsmInsn(0, set(), [(0, 0), (5, 1), (10, 2), (15, 3)], True)),
-            Insn("asm", asm=AsmInsn(0, set(), [(0, 4), (5, 5), (10, 6), (15, 7)], False)),
+            AsmInsn(0, set(), [(0, 0), (5, 1), (10, 2), (15, 3)], True),
+            AsmInsn(0, set(), [(0, 4), (5, 5), (10, 6), (15, 7)], False),
         ]
         code = emit_asm_batch(batch)
         self.assertIn("ldr x17, [%0, #56]", code)
@@ -21,8 +21,8 @@ class GenericLifterSafetyTests(unittest.TestCase):
 
     def test_scratch_exhaustion_is_checked_for_constant_operands(self):
         batch = [
-            Insn("asm", asm=AsmInsn(0, set(), [(0, 0), (5, 1), (10, 2), (15, 3)], True)),
-            Insn("asm", asm=AsmInsn(0, set(), [(0, 4), (5, 5), (10, 6), (15, 7)], False, [(20, 0x1234)])),
+            AsmInsn(0, set(), [(0, 0), (5, 1), (10, 2), (15, 3)], True),
+            AsmInsn(0, set(), [(0, 4), (5, 5), (10, 6), (15, 7)], False, [(20, 0x1234)]),
         ]
         with self.assertRaises(Unsupported):
             emit_asm_batch(batch)
