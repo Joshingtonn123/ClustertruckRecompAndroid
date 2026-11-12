@@ -273,12 +273,16 @@ static bool is_dir(const std::string &p) {
     return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
 }
 
-// exefs: the folder with main and main.npdm; romfs: the folder with region_common (the game's data root). Found
-// in the picked folder or a few levels below it (dump tools nest them).
+// exefs: the folder with main and main.npdm; RomFS: region_common for LAS titles, Unity Data
+// for the generic Clustertruck target. Found in the picked folder or a few levels below it (dump tools nest them).
 static void find_game(const std::string &dir, int depth, std::string &exefs, std::string &romfs, bool &unusable) {
     if (depth > 4 || (!exefs.empty() && !romfs.empty())) return;
     if (exefs.empty() && file_exists(dir + "/main") && file_exists(dir + "/main.npdm")) exefs = dir;
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    if (romfs.empty() && is_dir(dir + "/Data")) romfs = dir;
+#else
     if (romfs.empty() && is_dir(dir + "/region_common")) romfs = dir;
+#endif
     DIR *d = opendir(dir.c_str());
     if (!d) return;
     std::vector<std::string> sub;
