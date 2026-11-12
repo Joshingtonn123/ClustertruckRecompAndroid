@@ -11,7 +11,9 @@ class ClustertruckNativeBootTests(unittest.TestCase):
 
     def test_generic_android_setup_exposes_static_and_native_paths(self):
         launcher = self.read("runtime/ui/launcher.mm")
-        self.assertIn('#ifdef __ANDROID__\\n                    {   // Both execution paths are exposed', launcher)
+        self.assertIn("Both execution paths are exposed", launcher)
+        self.assertIn("#ifdef CLUSTERTRUCK_GENERIC_TITLE", launcher)
+        self.assertIn('static const char *const modes[] = {"Recompiled", "Native (experimental)"};', launcher)
         self.assertIn('static const char *const modes[] = {"Recompiled", "Native (experimental)"};', launcher)
         self.assertIn("translate the Switch ARM64 modules to C", launcher)
         self.assertIn("run the original ARM64 modules directly", launcher)
