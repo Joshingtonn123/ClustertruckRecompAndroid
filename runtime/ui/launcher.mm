@@ -183,6 +183,11 @@ static bool file_exists(const std::string &p) {
 // The copied game files alone ("" = there), without the game code built from them
 static std::string check_copied_files(const std::string &root) {
     if (!file_exists(root + "/exefs/main")) return "No game files";
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    // Clustertruck is a different title: it has no LAS Zelda build ID or region_common directory.
+    // The generic profile requires the SDK module and the Unity Data tree instead.
+    if (!file_exists(root + "/exefs/sdk")) return "Clustertruck SDK module is missing";
+#else
     if (!game_version_of(root.c_str())) {
 #ifdef __ANDROID__
         if (file_exists(root + "/exefs/sdk") && gamelib_present(root.c_str()))
@@ -190,16 +195,26 @@ static std::string check_copied_files(const std::string &root) {
 #endif
         return "Clustertruck game code is not built yet";
     }
+#endif
 #ifdef __ANDROID__
     char linked[1024];  // (the game files used in place: the player's own romfs/ or romfs.bin - romfs_build.h romfs.link)
     if (romfs_link_read(root.c_str(), linked, sizeof linked)) {
         struct stat st;
         if (stat(linked, &st) != 0) return "The game files folder was moved or can't be read";
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+        if (S_ISDIR(st.st_mode)) return file_exists(std::string(linked) + "/Data") ? "" : "Clustertruck Unity Data folder is missing";
+        return S_ISREG(st.st_mode) && st.st_size > 0 ? "" : "Clustertruck RomFS image is empty";
+#else
         if (S_ISDIR(st.st_mode)) return file_exists(std::string(linked) + "/region_common") ? "" : "Game data missing";
         return file_exists(root + "/romfs/region_common") ? "" : "Game data missing";  // (their romfs.bin: the loose few here)
+#endif
     }
 #endif
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    if (!file_exists(root + "/romfs/Data") || !file_exists(root + "/romfs.bin")) return "Clustertruck Unity Data or RomFS image is missing";
+#else
     if (!file_exists(root + "/romfs/region_common") || !file_exists(root + "/romfs.bin")) return "Game data missing";
+#endif
     return "";
 }
 
@@ -280,12 +295,28 @@ static void find_game(const std::string &dir, int depth, std::string &exefs, std
     for (auto &s : sub) find_game(s, depth + 1, exefs, romfs, unusable);
 }
 
-// A supported game version (runtime/game_addresses/versions.h)? Logs which one.
+// A supported game version (LAS), or well-formed generic Switch modules (Clustertruck).
 static bool build_id_ok(const std::string &exefs) {
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    auto valid_nso = [](const std::string &path) {
+        FILE *f = fopen(path.c_str(), "rb");
+        if (!f) return false;
+        char header[0x60];
+        bool ok = fread(header, 1, sizeof header, f) == sizeof header && !memcmp(header, "NSO0", 4);
+        fclose(f);
+        return ok;
+    };
+    bool main_ok = valid_nso(exefs + "/main");
+    bool sdk_ok = valid_nso(exefs + "/sdk");
+    fprintf(stderr, "[launcher] Clustertruck modules: main %s, sdk %s\n", main_ok ? "NSO0" : "invalid",
+            sdk_ok ? "NSO0" : "missing/invalid");
+    return main_ok && sdk_ok;
+#else
     char label[32];
     const char *v = game_release_label(exefs.c_str(), label, sizeof label);
     fprintf(stderr, "[launcher] game files: %s\n", v ? (std::string("version ") + v).c_str() : "an unsupported version");
     return v != NULL;
+#endif
 }
 
 // progress (the overlay's bar): the romfs copy, then the image build - each about the size of romfs/
@@ -2337,7 +2368,7 @@ extern "C" void launcher_run(const char *root) {
                                       "the game can boot yet.");
 #ifdef __ANDROID__
                 if (native_wanted())
-                    ex_d = tr("The Clustertruck generic recompilation profile builds its own native code from the Switch executable.");
+                    ex_d = tr("Experimental native mode runs the original Switch ARM64 modules directly; it skips the on-phone code-generation step.");
 #endif
                 if (!job.empty()) ex_d += "\n\n" + std::string(tr(job.c_str())) + (job_hint.empty() ? "" : ".\n" + std::string(tr(job_hint.c_str())));
 
