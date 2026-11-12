@@ -606,12 +606,23 @@ extern "C" JNIEXPORT void JNICALL Java_com_lasrecomp_LASRecompActivity_nativeLog
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_lasrecomp_LASRecompActivity_nativeBuildIdOk(JNIEnv *env, jclass, jbyteArray head) {
-    if (env->GetArrayLength(head) < 0x54) return JNI_FALSE;
+    if (env->GetArrayLength(head) < 0x60) return JNI_FALSE;
+    uint8_t hdr[0x60];
+    env->GetByteArrayRegion(head, 0, sizeof hdr, (jbyte *)hdr);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return JNI_FALSE; }
+    if (memcmp(hdr, "NSO0", 4)) return JNI_FALSE;
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    char build_id[41];
+    for (int i = 0; i < 20; i++) snprintf(build_id + i * 2, 3, "%02X", hdr[0x40 + i]);
+    fprintf(stderr, "[launcher] generic Clustertruck NSO accepted (build ID %s)\\n", build_id);
+    return JNI_TRUE;
+#else
     uint8_t b[20];  // (the main program's build ID: a supported version, runtime/game_addresses/versions.h)
-    env->GetByteArrayRegion(head, 0x40, 20, (jbyte *)b);
+    memcpy(b, hdr + 0x40, sizeof b);
     const GameVersion *v = game_version_by_build_id(b);
-    fprintf(stderr, "[launcher] game files: %s%s\n", v ? "version " : "an unsupported version", v ? v->label : "");
+    fprintf(stderr, "[launcher] game files: %s%s\\n", v ? "version " : "an unsupported version", v ? v->label : "");
     return v ? JNI_TRUE : JNI_FALSE;
+#endif
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_lasrecomp_LASRecompActivity_nativeImportChecking(JNIEnv *, jclass) {
@@ -647,6 +658,12 @@ extern "C" JNIEXPORT void JNICALL Java_com_lasrecomp_LASRecompActivity_nativeImp
 // The few romfs/ files the runtime opens by path rather than through romfs.bin: the movies (hle/movie.c, the start
 // screen's background) and the sheets the texture patches scan (nvn/texpatch.c load_refs). Only these stay loose.
 static bool keep_loose(const char *rel) {
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    // Clustertruck's Unity player can address files in its Data tree by path as well as through RomFS.
+    // Its dump is small (~295 MB), so retain the full Unity tree beside the indexed image rather than
+    // accidentally pruning files based on Zelda's tiny path allowlist.
+    return rel && *rel;
+#else
     static const char *const files[] = {
         "region_common/ui/Game.arc", "region_common/ui/StartUp.arc", "regionUS/common/ui/GameRegionCommon.arc",
         "regionEU/common/ui/GameRegionCommon.arc", "region_common/actor/ItemBottle.bfres",
@@ -657,6 +674,7 @@ static bool keep_loose(const char *rel) {
     for (const char *f : files)
         if (!strcmp(rel, f)) return true;
     return false;
+#endif
 }
 
 // (from upstream LASRecomp beta_5.3: its issues #391 / #389) A copy with one of the game's files damaged, renamed or
@@ -832,7 +850,11 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_lasrecomp_LASRecompActivity_native
     bool ok = true;
     if (S_ISDIR(st.st_mode)) {
         walk_romfs(path, "", &l, 0);
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+        if (!file_exists(path + "/Data")) ok = false, snprintf(why, sizeof why, "%s isn't the Clustertruck Unity RomFS folder", path.c_str());
+#else
         if (!file_exists(path + "/region_common")) ok = false, snprintf(why, sizeof why, "%s isn't the game's romfs folder", path.c_str());
+#endif
     } else {
         int fd = open(path.c_str(), O_RDONLY);
         ok = fd >= 0 && romfs_image_fd_ok(fd, why, sizeof why) && romfs_image_files(fd, img_entry, &l, why, sizeof why);
