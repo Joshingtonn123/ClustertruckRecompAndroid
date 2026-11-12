@@ -547,6 +547,7 @@ static void prepare_module(Module *m) {
     uint32_t *text = (uint32_t *)(uintptr_t)(m->base + m->text_off);
     uint64_t nw = m->text_size / 4, room = 0;
     bool is_main = m->base == MAIN_BASE;
+#ifndef CLUSTERTRUCK_GENERIC_TITLE
     if (is_main) {  // (first: a seed's word is the instruction there now)
         uint64_t a;
         uint32_t w;
@@ -554,6 +555,7 @@ static void prepare_module(Module *m) {
         for (int i = 0; rando_code_word(i, &a, &w); i++, n++) *(uint32_t *)(uintptr_t)a = w;
         if (n) LOG("[native] %d code words of the seed written\n", n);
     }
+#endif
     for (uint64_t i = 0; i < nw; i++) {
         uint32_t w = text[i];
         if ((w & 0xFFE0001Fu) == 0xD4000001u || (w & ~31u) == MRS_TPIDR || (w & ~31u) == MRS_TPIDRRO || (w & ~31u) == MSR_TPIDR)
@@ -561,7 +563,9 @@ static void prepare_module(Module *m) {
         else if ((w & ~31u) == MRS_CNTPCT) room += 48;
         else if ((w & ~31u) == MRS_CNTFRQ) room += 16;
     }
+#ifndef CLUSTERTRUCK_GENERIC_TITLE
     if (is_main) room += NFIX * 128;
+#endif
     uint64_t area = (m->base + m->size + 0xFFFF) & ~0xFFFFull, asize = page_up(room ? room : 1);
     plat_commit(area, asize);
     uint64_t at = area;
@@ -589,6 +593,11 @@ static void prepare_module(Module *m) {
         at += len;
     }
     unsigned nfixed = 0;
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    // Clustertruck has no verified Zelda address map. Do not inspect or apply the LAS/Zelda fix table:
+    // GA_AT() would otherwise point at address zero in the generic profile.
+    if (is_main) LOG("[native] generic Clustertruck mode: Zelda-specific native fixes skipped\n");
+#else
     for (uint32_t f = 0; is_main && f < NFIX; f++) {
         uint64_t site = GA_AT(fixes[f].site), alt = fixes[f].alt == NO_ALT ? 0 : GA_AT(fixes[f].alt);
         uint32_t *w = (uint32_t *)(uintptr_t)site;
@@ -600,6 +609,7 @@ static void prepare_module(Module *m) {
         *w = enc_b(site, at - 128);
         nfixed++;
     }
+#endif
     uint64_t t0 = m->base + m->text_off, tsz = page_up(m->text_size);
     __builtin___clear_cache((char *)(uintptr_t)t0, (char *)(uintptr_t)(t0 + tsz));
     __builtin___clear_cache((char *)(uintptr_t)area, (char *)(uintptr_t)(area + asize));
