@@ -53,6 +53,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -64,8 +66,17 @@ jobs:
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.16248370" "cmake;3.30.4"
       - name: Test and build the Android 11-compatible dump probe
         run: bash ./android/probe/gradlew -p android/clustertruck-probe --no-daemon :app:testDebugUnitTest :app:assembleDebug
-      - name: Validate Clustertruck app Gradle configuration (no APK build)
-        run: bash ./android/probe/gradlew -p android/lasrecomp --no-daemon --dry-run :app:assembleDebug
+      - name: Build Android runtime dependencies (SDL3, shaderc, Vulkan headers)
+        run: BUILD_JOBS=2 bash android/deps/build_deps.sh
+      - name: Build the actual Clustertruck Android app (experimental native mode)
+        run: bash ./android/probe/gradlew -p android/lasrecomp --no-daemon :app:assembleDebug
+      - name: Upload Clustertruck experimental APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: clustertruck-native-experimental-debug
+          path: android/lasrecomp/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload dump probe APK
         uses: actions/upload-artifact@v4
         with:
