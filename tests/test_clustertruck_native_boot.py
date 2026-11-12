@@ -27,8 +27,9 @@ class ClustertruckNativeBootTests(unittest.TestCase):
         self.assertIn('bool sdk_ok = valid_nso(exefs + "/sdk");', launcher)
         self.assertIn("return main_ok && sdk_ok;", launcher)
 
-    def test_launcher_checks_unity_data_instead_of_zelda_region_common(self):
+    def test_launcher_finds_unity_data_folder_and_checks_it(self):
         launcher = self.read("runtime/ui/launcher.mm")
+        self.assertIn('#ifdef CLUSTERTRUCK_GENERIC_TITLE\\n    if (romfs.empty() && is_dir(dir + "/Data")) romfs = dir;\\n#else', launcher)
         self.assertIn('file_exists(std::string(linked) + "/Data")', launcher)
         self.assertIn('file_exists(root + "/romfs/Data")', launcher)
         self.assertIn('file_exists(root + "/romfs/region_common")', launcher)  # preserved for upstream LAS profiles
