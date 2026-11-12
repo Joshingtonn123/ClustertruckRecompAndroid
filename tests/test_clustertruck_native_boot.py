@@ -16,7 +16,8 @@ class ClustertruckNativeBootTests(unittest.TestCase):
         self.assertIn('static const char *const modes[] = {"Recompiled", "Native (experimental)"};', launcher)
         self.assertIn('static const char *const modes[] = {"Recompiled", "Native (experimental)"};', launcher)
         self.assertIn("translate the Switch ARM64 modules to C", launcher)
-        self.assertIn("run the original ARM64 modules directly", launcher)
+        self.assertIn("Native (experimental): run the original", launcher)
+        self.assertIn("ARM64 modules directly", launcher)
         self.assertIn('if ((m == 1) != g_settings.native_code)', launcher)
 
     def test_native_mode_defaults_on_for_generic_android_target(self):
