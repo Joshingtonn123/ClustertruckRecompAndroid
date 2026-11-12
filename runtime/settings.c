@@ -27,6 +27,10 @@ Settings g_settings = {
     .reverb = true,
     .movie_audio = true,
 #ifdef __ANDROID__
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    // This target has no validated static game-code build yet. Start with its guarded ARM64 native path.
+    .native_code = true,
+#endif
     .fps_mode = 1,       // compatibility-first startup: fixed 30, unless the saved configuration chooses otherwise
     .res_mode = RES_Q50,
     .show_fps = true,  // (the performance overlay, ui/perf_overlay.mm: on until turned off in the menu)
