@@ -35,6 +35,14 @@ class ClustertruckNativeBootTests(unittest.TestCase):
         self.assertIn('generic Clustertruck NSO accepted', launcher)
         self.assertIn('return JNI_TRUE;', launcher)
 
+    def test_android_saf_import_does_not_force_valid_generic_nso_to_exefs_only(self):
+        java = self.read("android/lasrecomp/app/src/main/java/com/lasrecomp/LASRecompActivity.java")
+        launcher = self.read("runtime/ui/launcher.mm")
+        self.assertIn("if (!nativeBuildIdOk(head)) compileOnly = true;", java)
+        self.assertIn('if (memcmp(hdr, "NSO0", 4)) return JNI_FALSE;', launcher)
+        self.assertIn("return JNI_TRUE;", launcher)
+        self.assertIn("generic Clustertruck NSO accepted", launcher)
+
     def test_unity_romfs_in_place_and_loose_file_policy(self):
         launcher = self.read("runtime/ui/launcher.mm")
         self.assertIn('file_exists(path + "/Data")', launcher)
