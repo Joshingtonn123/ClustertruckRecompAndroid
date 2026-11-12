@@ -2394,7 +2394,9 @@ extern "C" void launcher_run(const char *root) {
                                       "the game can boot yet.");
 #ifdef __ANDROID__
                 if (native_wanted())
-                    ex_d = tr("Experimental native mode runs the original Switch ARM64 modules directly; it skips the on-phone code-generation step.");
+                    ex_d = tr("Experimental native mode runs the original Switch ARM64 modules directly. Switch services and game graphics are still being integrated.");
+                else
+                    ex_d = tr("Static recompilation translates the Switch ARM64 modules to C and compiles them into an Android library. Unsupported instructions or Switch services can still prevent boot.");
 #endif
                 if (!job.empty()) ex_d += "\n\n" + std::string(tr(job.c_str())) + (job_hint.empty() ? "" : ".\n" + std::string(tr(job_hint.c_str())));
 
@@ -2408,18 +2410,23 @@ extern "C" void launcher_run(const char *root) {
                 opt_begin("##files", sc);
                 if (!ready) {
                     opt_section("Your copy of the game");
-#if defined(__ANDROID__) && !defined(CLUSTERTRUCK_GENERIC_TITLE)
-                    {   // Native Switch code mode is not offered for generic Clustertruck builds (picking it sets the game up at once):
-                        // built from the files (recompiled) or the game's own on the CPU (native: no build; runtime/native.c)
+#ifdef __ANDROID__
+                    {   // Both execution paths are exposed for this generic title: static C recompilation or experimental
+                        // direct execution of the original ARM64 modules (runtime/native.c).
                         static const char *const modes[] = {"Recompiled", "Native (experimental)"};
                         int m = g_settings.native_code ? 1 : 0;
                         if (busy) opt_disable_next();
                         opt_choice("Game code", &m, modes, 2, 0,
-                                   "Recompiled: the setup rebuilds the game's code for this phone from your files (once, it "
-                                   "may take a while). Set up this way, the game can still run natively: Video > Native game "
-                                   "code.\n\nNative: the game's own code runs directly on the phone's CPU, so the "
-                                   "setup only copies the files - no build. An experiment. Switching to Recompiled later "
-                                   "means building the game code then.");
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+                                   "Recompiled: translate the Switch ARM64 modules to C, then compile them into a native "
+                                   "Android library. This is the true static-recompilation path, but some instructions or "
+                                   "Switch services may still be unsupported.\n\nNative (experimental): run the original "
+                                   "ARM64 modules directly, rewriting SVC, TLS and counter instructions. It skips code "
+                                   "generation but still needs working Switch services and graphics.");
+#else
+                                   "Recompiled: the setup rebuilds the game's code for this phone from your files. "
+                                   "Native: the game's own code runs directly on the phone's CPU, an experiment.");
+#endif
                         if ((m == 1) != g_settings.native_code) {
                             g_settings.native_code = m == 1;
                             settings_save();
