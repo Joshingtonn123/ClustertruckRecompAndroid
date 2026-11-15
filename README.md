@@ -45,7 +45,8 @@ A separate Android 11+ probe app is at [`android/clustertruck-probe/`](android/c
 3. **Inspect standalone NSO** — reports its visible build ID, flags, BSS size, and text/rodata/data segment sizes and offsets.
 4. **Scan an already-extracted Switch folder** — looks for the `main`, `sdk`, `rtld`, `subsdk*` NSO module headers and hashes `main.npdm`. It reads only those headers and the NPDM file for hashing; it does not inspect engine data, unpack or modify files.
 5. **RomFS inventory** — when the selected extracted root contains `romfs/`, counts files and bytes, groups extensions, samples paths and checks a small prefix of up to 32 files for familiar asset signatures. It does not unpack the assets.
-6. **Share report** — copies or shares the text report so module metadata can be assessed without uploading game files.
+6. **Unity metadata inspection** — reads the first 16 MiB of selected already-extracted Unity metadata/assets files (including `globalgamemanagers`, `.assets`, `.resource`, `level0` and `unity default resources`) and reports the serialized-file format, engine-version string, type-tree state, and exact Shader (class 48) / ComputeShader (class 72) type hashes. It does not unpack UnityFS bundles or decode asset objects.
+7. **Share report** — copies or shares the text report so module metadata can be assessed without uploading game files.
 
 The probe does not contain game files or keys, decrypt packages, modify the dump, or run the game. An NSP/XCI filename listing alone cannot prove that the executable is supported. A report from the extracted game root containing both `exefs/` and `romfs/` is the most useful input.
 
