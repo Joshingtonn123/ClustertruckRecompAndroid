@@ -48,6 +48,7 @@ public final class MainActivity extends Activity {
     private static final int MAX_PFS0_ENTRIES = 8192;
     private static final int MAX_STRING_TABLE = 4 * 1024 * 1024;
     private static final int MAX_FILES = 100_000;
+    private static final int MAX_UNITY_METADATA_PREFIX = 16 * 1024 * 1024;
     private TextView reportView;
     private TextView statusView;
     private Button playButton;
@@ -616,10 +617,19 @@ public final class MainActivity extends Activity {
         } else {
             out.append("No directory named romfs/ was found. Select the extracted game root if RomFS was extracted.\n");
         }
+        if (!scan.unityMetadataReports.isEmpty()) {
+            out.append("\nUnity serialized-file metadata (read-only):\n");
+            for (String item : scan.unityMetadataReports) out.append("  ").append(item).append('\n');
+            out.append("Matching Shader type trees require the same class ID and 16-byte type hash across files.\n");
+        } else {
+            out.append("\nUnity serialized-file metadata: no supported raw Unity asset headers were recognized in the scanned RomFS files.\n");
+        }
         if (scan.npdmReport != null) out.append("\nmain.npdm metadata:\n  ").append(scan.npdmReport).append('\n');
 
         out.append("\nNotes:\n");
         out.append("- The scan reads already-extracted NSO modules and main.npdm metadata only; it does not decrypt packages or modify files.\n");
+        out.append("- Unity metadata inspection reads only the first 16 MiB of selected already-extracted RomFS metadata/assets files; it does not unpack bundles or decode game assets.\n");
+        out.append("- A matching Shader type tree is identified by class ID plus its 16-byte type hash; engine-version labels alone are not sufficient.\n");
         out.append("- Dynamic import and relocation summaries help identify runtime requirements, but do not prove the game can boot.\n");
         out.append("- No executable payload was uploaded or included in this report.\n");
         return out.toString();
@@ -640,6 +650,7 @@ public final class MainActivity extends Activity {
         final Map<String, Integer> romfsExtensions = new TreeMap<>();
         final Map<String, Integer> romfsSignatures = new TreeMap<>();
         final List<String> romfsSamples = new ArrayList<>();
+        final List<String> unityMetadataReports = new ArrayList<>();
         final List<String> nsoReports = new ArrayList<>();
         final List<NsoInspector.ModuleReport> nsoModules = new ArrayList<>();
     }
@@ -693,6 +704,17 @@ public final class MainActivity extends Activity {
 
     private void inspectFolderFile(Uri uri, String path, long size, boolean inRomfs, FolderScan scan) {
         String basename = path.substring(path.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+        if (inRomfs && isUnityMetadataCandidate(basename) && scan.unityMetadataReports.size() < 64) {
+            try (InputStream unityInput = getContentResolver().openInputStream(uri)) {
+                if (unityInput != null) {
+                    byte[] prefix = readAtMost(unityInput, MAX_UNITY_METADATA_PREFIX);
+                    String unityReport = UnitySerializedInspector.inspect(prefix, size, path);
+                    if (unityReport != null) scan.unityMetadataReports.add(unityReport);
+                }
+            } catch (Exception error) {
+                scan.unityMetadataReports.add(path + " — metadata read error: " + error.getMessage());
+            }
+        }
         if (inRomfs) {
             scan.romfsFileCount++;
             if (size >= 0) {
@@ -750,6 +772,13 @@ public final class MainActivity extends Activity {
                 scan.npdmReport = path + " — SHA-256 unavailable: " + error.getMessage();
             }
         }
+    }
+
+    private static boolean isUnityMetadataCandidate(String basename) {
+        return basename.equals("globalgamemanagers") || basename.equals("globalgamemanagers.assets") ||
+                basename.equals("resources.assets") || basename.equals("sharedassets0.assets") ||
+                basename.equals("unity default resources") || basename.equals("level0") ||
+                basename.endsWith(".assets") || basename.endsWith(".resource");
     }
 
     private static String classifyRomfsSignature(byte[] prefix) {
