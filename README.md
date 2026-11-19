@@ -20,7 +20,7 @@ The `clustertruck-dev` branch now contains:
 - The NSO loader and Android dump inspector recognize SysV and GNU dynamic symbol hash tables, and the loader handles packed `DT_RELR` relative relocations. These format-handling ideas are adapted from the MIT-licensed [SavageWindRecomp](https://github.com/Revivedx/SavageWindRecomp) loader, with extra module bounds checks and synthetic tests.
 - Added a host implementation for the exact unmatched SDK import `nnosGetDefaultUserExceptionStackForApplication`: it supplies a zeroed, page-aligned 64 KiB guest exception stack and writes the size through the SDK's optional output pointer. Its ABI behavior is adapted from the MIT-licensed [P5R Android runtime](https://github.com/Brandon04Gonzalez/p5r-android), with an in-place reboot reset hook.
 - The Android dump probe inventories an extracted `romfs/` tree (file count, total bytes, extensions and a small signature sample) without unpacking or copying its assets. Its NSO inspector reads segment ranges in file-offset order, skipping large alignment/padding gaps while keeping per-segment and decompressed-image safety limits.
-- CI tests and a separate Clustertruck dump-probe diagnostic app build. The LAS-based full-app packaging job is intentionally excluded from this Clustertruck workflow.
+- CI tests, a separate Clustertruck dump-probe diagnostic app, and an experimental Clustertruck Android debug APK build. The APK packages the current runtime foundation; it is not a playable game release.
 
 The generic generator is tested with a synthetic NSO containing a function that returns. This proves the generic generator path can emit C for an unknown build ID; it does not prove the real Clustertruck executable is supported. The actual Switch executable payloads have not yet been supplied for direct code-generation testing. The generic loader now maps `main`, `sdk`, and optional `subsdk0`, but the real module startup order, unresolved imports, Unity-facing services, NVN behavior and any additional ExeFS modules remain unverified.
 
@@ -28,13 +28,13 @@ The generic generator is tested with a synthetic NSO containing a function that 
 
 The LAS-derived Android app source has now been adapted into a separate Clustertruck app profile. Its source still sits in the historical `android/lasrecomp/` directory, but Gradle installs it as **Clustertruck Recomp** (`com.clustertruck.recomp`). The internal Java namespace `com.lasrecomp` is deliberately retained for the existing SDL/JNI native bindings; it is not the installed Android package ID.
 
-The Clustertruck profile now has its own launcher icon, app identity, data/settings/log names and foreground notification. The Android setup flow is worded for a Clustertruck Switch dump. XCI/NSP choices still hand extraction to NxDump; this app does not yet parse or decrypt those containers itself.
+The Clustertruck profile now has its own launcher icon, app identity, data/settings/log names and foreground notification. The Android setup screen keeps three source choices: **XCI**, **NSP**, and an **already-extracted folder**. XCI/NSP hand off to the separate [NxDump Android app](https://github.com/alialani04/nxdump), which performs the user's local extraction; Clustertruck Recomp then imports the game-specific output folder containing both `exefs/` and `romfs/`. The app itself does not parse or decrypt XCI/NSP containers.
 
 When the Android generator dependencies are built, the Clustertruck app package is configured to bundle the generic NSO generator and compiler runtime. It does not package the Zelda build-ID tables, instruction patch module, version-specific hot-function list or randomizer patch data. The Android runtime also hides Zelda-only pages such as Save Editor, Randomizer, Warp, Cheats, Gameplay and Cosmetics; only common Controls, Video and Audio pages remain exposed.
 
 **This is an adapted app foundation, not a playable game release.** The generic NSO recompilation step can generate native code, but Unity startup, Switch service emulation, game-specific memory/filesystem integration and Clustertruck rendering are not implemented. The app's boot gate remains in place so it will not pretend the game is ready.
 
-The lightweight Clustertruck workflow builds the diagnostic probe APK, runs source/generator tests, and performs a Gradle dry-run of the Clustertruck app project. It does not assemble the full recompilation app yet; the probe APK is not the Clustertruck app.
+The Clustertruck workflow runs the probe and generic-recompiler tests, builds the Android dump-probe APK, builds the experimental Clustertruck Android debug APK, and uploads both APKs as workflow artifacts. A successful APK build does not mean the title can boot or play.
 
 ## Diagnostic app
 
@@ -71,4 +71,4 @@ We still need non-sensitive metadata from the actual Switch build:
 
 All Clustertruck experiments stay on `clustertruck-dev`. The upstream-derived `main` branch is intentionally untouched.
 
-The dump-probe APK and test outputs are temporary GitHub Actions artifacts. Open the [Clustertruck workflow runs](https://github.com/Joshingtonn123/ClustertruckRecompAndroid/actions/workflows/clustertruck-probe.yml?query=branch%3Aclustertruck-dev) to access recent builds. The separate probe APK only inspects extracted files; it is **not** a recompilation runtime or a playable Clustertruck release. The LAS-based full-app build is deliberately not part of this workflow.
+The experimental Clustertruck APK and dump-probe APK are temporary GitHub Actions artifacts. Open the [Clustertruck workflow runs](https://github.com/Joshingtonn123/ClustertruckRecompAndroid/actions/workflows/clustertruck-probe.yml?query=branch%3Aclustertruck-dev) to access recent builds. The dump-probe APK only inspects extracted files; it is **not** a recompilation runtime. The experimental Clustertruck APK is also **not playable yet**: the game-specific startup, Switch services, runtime integration and rendering remain incomplete.

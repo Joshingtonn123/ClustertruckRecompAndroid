@@ -9,6 +9,8 @@
 #pragma once
 
 void opt_begin(const char *id, float scale);
+// ID of the last interactive option control (not the decorative separator that follows it).
+unsigned int opt_last_item_id(void);
 void opt_section(const char *title);
 bool opt_toggle(const char *label, bool *v, bool def, const char *desc);
 // wrap: past the last value back to the first (and the other way); false: stops at the ends

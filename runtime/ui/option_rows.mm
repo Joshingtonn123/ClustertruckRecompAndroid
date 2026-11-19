@@ -13,6 +13,8 @@
 #include "osk.h"
 
 static float g_scale = 1;
+static ImGuiID g_last_item_id;  // the actual control, before touch_end's decorative separator
+unsigned int opt_last_item_id(void) { return (unsigned int)g_last_item_id; }
 static std::string g_desc_hover, g_desc_focus, g_desc_shown;  // this frame's hovered / selected row, and the last shown
 static std::string g_desc_first;  // the page's first row (shown until a row is selected or hovered)
 
@@ -89,13 +91,17 @@ static int pad_step() {
     return 0;
 }
 static void touch_end() {
+    // Save the widget ID before Spacing/Separator below replace ImGui's LastItemData with an ID-less item.
+    g_last_item_id = ImGui::GetItemID();
     // (opt_focus_first: the controller's cursor on this row's control - focused, not activated: SetKeyboardFocusHere
     // turned a slider into a text field, where left / right did nothing and B only ended the typing)
     if (g_take_first) {
         g_take_first = false;
-        ImGui::SetFocusID(ImGui::GetItemID(), ImGui::GetCurrentWindow());
-        ImGui::SetNavCursorVisible(true);
-        ImGui::SetScrollHereY(0);
+        if (g_last_item_id != 0) {
+            ImGui::SetFocusID(g_last_item_id, ImGui::GetCurrentWindow());
+            ImGui::SetNavCursorVisible(true);
+            ImGui::SetScrollHereY(0);
+        }
     }
     if (ImGui::IsItemFocused()) ui_log_nav(g_row_label);
     ImGui::EndDisabled();
@@ -145,9 +151,10 @@ static int row(const char *label, const std::string &value, bool changed, const 
     ImGui::PushStyleColor(ImGuiCol_NavCursor, ImVec4(0, 0, 0, 0));  // (the row's own border shows the selection)
     bool clicked = ImGui::InvisibleButton("##row", ImVec2(w, h), ImGuiButtonFlags_EnableNav);
     ImGui::PopStyleColor();
+    g_last_item_id = ImGui::GetItemID();
     if (g_take_first) {  // (opt_focus_first)
         g_take_first = false;
-        ImGui::SetFocusID(ImGui::GetItemID(), ImGui::GetCurrentWindow());
+        if (g_last_item_id != 0) ImGui::SetFocusID(g_last_item_id, ImGui::GetCurrentWindow());
         ImGui::SetNavCursorVisible(true);
         ImGui::SetScrollHereY(0);
     }

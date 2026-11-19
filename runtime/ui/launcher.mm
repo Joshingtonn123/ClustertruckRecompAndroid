@@ -2405,7 +2405,16 @@ extern "C" void launcher_run(const char *root) {
                 if (seen_frame != ImGui::GetFrameCount() - 1) focus_first = 4;
                 seen_frame = ImGui::GetFrameCount();
                 auto first_row = [&] {
-                    if (focus_first > 0 && focus_first--) ImGui::SetFocusID(ImGui::GetItemID(), ImGui::GetCurrentWindow());
+                    // Android option rows append spacing/separators after their button. GetItemID() would be zero
+                    // here (the separator has no ID), so use the control ID saved by option_rows.mm instead.
+                    if (focus_first > 0) {
+                        unsigned int id = opt_last_item_id();
+                        if (id != 0) {
+                            focus_first--;
+                            ImGui::SetFocusID(id, ImGui::GetCurrentWindow());
+                            ImGui::SetNavCursorVisible(true);
+                        }
+                    }
                 };
                 opt_begin("##files", sc);
                 if (!ready) {

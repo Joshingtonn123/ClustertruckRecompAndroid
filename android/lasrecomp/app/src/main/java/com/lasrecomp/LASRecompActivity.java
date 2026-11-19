@@ -302,13 +302,14 @@ public class LASRecompActivity extends SDLActivity {
         new AlertDialog.Builder(this)
             .setTitle("Import " + format)
             .setMessage(
-                "NxDump handles " + format + " extraction. In NxDump, add the folder containing your dump, " +
-                "select the Clustertruck game, and extract BOTH ExeFS and RomFS. Enable Merge update when an update " +
-                "is detected. Your keys remain inside NxDump; do not share them.\n\n" +
-                "When extraction finishes, return here and choose the parent folder containing exefs/ and romfs/. " +
-                "Choosing exefs/ alone still works for code analysis, but it cannot preserve the game assets.\n\n" +
-                "This development build recompiles executable code and preserves RomFS for the next integration " +
-                "steps. It does NOT boot or play Clustertruck yet."
+                "NxDump handles " + format + " extraction. In NxDump, add the folder containing your own dump, " +
+                "select Clustertruck, choose BOTH ExeFS and RomFS, and extract. Enable Merge update when an update " +
+                "is detected. Keep your keys inside NxDump; never share them.\n\n" +
+                "When extraction finishes, return here and choose the game-specific output folder NxDump created. " +
+                "That folder must contain both exefs/ and romfs/; do not choose the overall output folder or exefs/ alone. " +
+                "Both are needed for a complete game-file import.\n\n" +
+                "This is still an experimental development build: the app can import the files and build executable " +
+                "code, but Clustertruck gameplay and boot are not verified yet."
             )
             .setPositiveButton("Open NxDump", (dialog, which) -> openNxDump(format))
             .setNegativeButton("Cancel", null)
@@ -346,10 +347,10 @@ public class LASRecompActivity extends SDLActivity {
             new AlertDialog.Builder(this)
                 .setTitle("Continue " + format + " import?")
                 .setMessage(
-                    "After NxDump finishes, select the extracted game folder that contains exefs/, " +
-                    "or select exefs/ itself (the folder with main and sdk). For the current generic " +
-                    "recompilation step, ExeFS is enough; RomFS can be skipped to save storage. " +
-                    "The game is not playable from this build yet."
+                    "After NxDump finishes, select the game-specific output folder it created, containing BOTH " +
+                    "exefs/ and romfs/. Do not select the overall output folder or exefs/ alone. Keep Merge update " +
+                    "enabled in NxDump when an update is detected. Clustertruck needs both executable files and game " +
+                    "assets for a complete import. This experimental runtime still has no verified game boot."
                 )
                 .setPositiveButton("Choose extracted folder", (d, w) -> pickGameFolder())
                 .setNegativeButton("Not now", null)
