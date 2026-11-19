@@ -33,10 +33,10 @@
 
 uint64_t g_guest_lo;  // the window's start (rt.h GUEST_LO), set by plat_reserve_guest before main()
 
-// ---- the log in a file as well (Saves & files > Driver compatibility, to send with a report): lasrecomp-log.txt in the
-// folder the player picked (LASRecompActivity.openLog, the run before's kept beside it), else <data root>/lasrecomp.log
-// (Android lets only adb read there). The first lines (before the setting is read, or a later switch on) wait in a
-// buffer, so the file starts with the driver's and the GPU's lines.
+// ---- the log in a file as well (Saves & files > Driver compatibility, to send with a report): clustertruck-log.txt in
+// the folder the player picked (LASRecompActivity.openLog, the run before's kept beside it), else
+// <data root>/logs/clustertruck-log.txt. The first lines wait in a buffer until settings are loaded, so the file also
+// starts with any early driver/GPU/runtime messages.
 static pthread_mutex_t g_logf_lock = PTHREAD_MUTEX_INITIALIZER;
 static FILE *g_logf;
 static bool g_logf_in_folder;               // g_logf is in the picked folder (else the data root)
@@ -94,9 +94,17 @@ static void log_file_begin(FILE *f, const char *root_file) {
 }
 
 void android_log_file(bool on) {
-    char root[1100], root_prev[1100];
-    snprintf(root, sizeof root, "%s/lasrecomp.log", rt_data_root());
-    snprintf(root_prev, sizeof root_prev, "%s/lasrecomp-previous.log", rt_data_root());
+    char dir[1100], root[1100], root_prev[1100];
+    int dn = snprintf(dir, sizeof dir, "%s/logs", rt_data_root());
+    bool have_log_dir = dn > 0 && (size_t)dn < sizeof dir && (mkdir(dir, 0700) == 0 || errno == EEXIST);
+    if (have_log_dir) {
+        snprintf(root, sizeof root, "%s/clustertruck-log.txt", dir);
+        snprintf(root_prev, sizeof root_prev, "%s/clustertruck-log-previous.txt", dir);
+    } else {
+        // Keep a writable fallback beside the other app data if the logs subdirectory cannot be made.
+        snprintf(root, sizeof root, "%s/clustertruck-log.txt", rt_data_root());
+        snprintf(root_prev, sizeof root_prev, "%s/clustertruck-log-previous.txt", rt_data_root());
+    }
     pthread_mutex_lock(&g_logf_lock);
     if (!on) {
         if (g_logf) fclose(g_logf);
