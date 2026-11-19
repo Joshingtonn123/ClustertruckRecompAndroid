@@ -1665,12 +1665,12 @@ static void prelaunch_tab(float sc) {
             if (g_settings.log_file && folder.empty()) android_call("pickLogFolder");  // (then nativeLogFolderPicked)
             else android_log_file(g_settings.log_file);
         }
-        ImGui::TextDisabled("%s", tr("Writes what the app reports (GPU, driver, errors) to clustertruck-log.txt in a folder you "
-                                     "choose (create one, e.g. Download/Clustertruck), to open on the phone and send with a "
-                                     "bug report. Turn it on and play until the problem shows; after a crash, the run "
-                                     "before is kept as clustertruck-log-previous.txt."));
-        if (folder.empty()) ImGui::TextDisabled("%s", tr("No folder chosen: the log stays in the app's own folder, which "
-                                                         "Android only lets a computer (adb) read."));
+        ImGui::TextDisabled("%s", tr("Writes startup, runtime, driver, GPU and error messages to clustertruck-log.txt. "
+                                     "The previous run is kept as clustertruck-log-previous.txt. Choose a folder such as "
+                                     "Download/Clustertruck to make the files easy to open and share."));
+        if (folder.empty()) ImGui::TextDisabled("%s", tr("No folder chosen: the log is saved automatically in the app data "
+                                                         "folder: files/logs/clustertruck-log.txt. Android may restrict "
+                                                         "file-manager access to Android/data."));
         else ImGui::Text(tr("Log folder: %s"), folder.c_str());
         ImGui::PushID("logdir");
         if (ImGui::Button(tr(folder.empty() ? "Choose folder" : "Change folder"))) android_call("pickLogFolder");
