@@ -309,7 +309,7 @@ public class LASRecompActivity extends SDLActivity {
                 "That folder must contain both exefs/ and romfs/; do not choose the overall output folder or exefs/ alone. " +
                 "Both are needed for a complete game-file import.\n\n" +
                 "This is still an experimental development build: the app can import the files and build executable " +
-                "code, but Clustertruck gameplay and boot are not verified yet."
+                "code, but does NOT boot or play Clustertruck yet."
             )
             .setPositiveButton("Open NxDump", (dialog, which) -> openNxDump(format))
             .setNegativeButton("Cancel", null)
