@@ -43,6 +43,7 @@ Settings g_settings = {
     .overlay_pos = {-1, -1},
     .gpu_heap = -1,
     .turnip_lrz = -1,
+    .log_file = true,   // keep startup/crash diagnostics without requiring Logcat or ADB
 #else
     .show_fps = false,
 #endif
