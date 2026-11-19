@@ -220,6 +220,14 @@ int main(int argc, char **argv) {
     }
     rt_paths_init();  // the data root becomes the working directory (runtime/paths.h)
 #ifdef __ANDROID__
+    // Start the native diagnostic file before launcher/renderer initialization. Early stderr lines are buffered by
+    // runtime/platform/android.c and copied into the file when it opens.
+    settings_load();
+    extern void android_log_file(bool on);
+    android_log_file(g_settings.log_file);
+    LOG("[android] diagnostic file logging: %s\n", g_settings.log_file ? "on" : "off");
+#endif
+#ifdef __ANDROID__
     {   // (tests) LARECOMP_RM_CACHE_DIRS=<name>[,<name>...]: remove those folders of the data root - test runs set the
         // shader caches aside as cache-<something>, and adb can't delete the app's files; only such names are taken
         extern void rm_cache_dirs(const char *list);
