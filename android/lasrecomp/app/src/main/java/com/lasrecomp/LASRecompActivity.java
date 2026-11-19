@@ -107,6 +107,7 @@ public class LASRecompActivity extends SDLActivity {
     private File saveTarget;
     private boolean exportPrevious;
     private static final String PREF_PENDING_PACKAGE_IMPORT = "pendingPackageImport";
+    private static final String PREF_PENDING_PACKAGE_IMPORT_IN_PLACE = "pendingPackageImportInPlace";
     private static final String NXDUMP_URL = "https://github.com/alialani04/nxdump";
     private static LASRecompActivity self;
 
@@ -273,8 +274,8 @@ public class LASRecompActivity extends SDLActivity {
                 .setNegativeButton("Cancel", null)
                 .create();
 
-            a.addGameSourceButton(content, dialog, "XCI package", () -> a.showNxDumpInstructions("XCI"));
-            a.addGameSourceButton(content, dialog, "NSP package", () -> a.showNxDumpInstructions("NSP"));
+            a.addGameSourceButton(content, dialog, "XCI package", () -> a.showNxDumpInstructions("XCI", useInPlace));
+            a.addGameSourceButton(content, dialog, "NSP package", () -> a.showNxDumpInstructions("NSP", useInPlace));
             a.addGameSourceButton(content, dialog, "Extracted folder", () -> {
                 if (useInPlace) a.pickGameFolderInPlace();
                 else a.pickGameFolder();
@@ -298,7 +299,7 @@ public class LASRecompActivity extends SDLActivity {
         parent.addView(button, params);
     }
 
-    private void showNxDumpInstructions(String format) {
+    private void showNxDumpInstructions(String format, boolean useInPlace) {
         new AlertDialog.Builder(this)
             .setTitle("Import " + format)
             .setMessage(
@@ -311,22 +312,26 @@ public class LASRecompActivity extends SDLActivity {
                 "This is still an experimental development build: the app can import the files and build executable " +
                 "code, but does NOT boot or play Clustertruck yet."
             )
-            .setPositiveButton("Open NxDump", (dialog, which) -> openNxDump(format))
+            .setPositiveButton("Open NxDump", (dialog, which) -> openNxDump(format, useInPlace))
             .setNegativeButton("Cancel", null)
             .show();
     }
 
-    private void openNxDump(String format) {
+    private void openNxDump(String format, boolean useInPlace) {
         Intent launch = new Intent(Intent.ACTION_MAIN);
         launch.addCategory(Intent.CATEGORY_LAUNCHER);
         launch.setClassName("com.nxdump", "com.nxdump.MainActivity");
         try {
             getSharedPreferences("clustertruck", MODE_PRIVATE).edit()
-                .putString(PREF_PENDING_PACKAGE_IMPORT, format).apply();
+                .putString(PREF_PENDING_PACKAGE_IMPORT, format)
+                .putBoolean(PREF_PENDING_PACKAGE_IMPORT_IN_PLACE, useInPlace)
+                .apply();
             startActivity(launch);
         } catch (Exception e) {
             getSharedPreferences("clustertruck", MODE_PRIVATE).edit()
-                .remove(PREF_PENDING_PACKAGE_IMPORT).apply();
+                .remove(PREF_PENDING_PACKAGE_IMPORT)
+                .remove(PREF_PENDING_PACKAGE_IMPORT_IN_PLACE)
+                .apply();
             new AlertDialog.Builder(this)
                 .setTitle("NxDump not found")
                 .setMessage("Install your NxDump 1.0.1 build, then try again. You can open the NxDump project page.")
@@ -341,7 +346,11 @@ public class LASRecompActivity extends SDLActivity {
         android.content.SharedPreferences prefs = getSharedPreferences("clustertruck", MODE_PRIVATE);
         String format = prefs.getString(PREF_PENDING_PACKAGE_IMPORT, null);
         if (format == null) return;
-        prefs.edit().remove(PREF_PENDING_PACKAGE_IMPORT).apply();
+        boolean useInPlace = prefs.getBoolean(PREF_PENDING_PACKAGE_IMPORT_IN_PLACE, false);
+        prefs.edit()
+            .remove(PREF_PENDING_PACKAGE_IMPORT)
+            .remove(PREF_PENDING_PACKAGE_IMPORT_IN_PLACE)
+            .apply();
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             if (isFinishing() || isDestroyed()) return;
             new AlertDialog.Builder(this)
@@ -352,7 +361,10 @@ public class LASRecompActivity extends SDLActivity {
                     "enabled in NxDump when an update is detected. Clustertruck needs both executable files and game " +
                     "assets for a complete import. This experimental runtime still has no verified game boot."
                 )
-                .setPositiveButton("Choose extracted folder", (d, w) -> pickGameFolder())
+                .setPositiveButton("Choose extracted folder", (d, w) -> {
+                    if (useInPlace) pickGameFolderInPlace();
+                    else pickGameFolder();
+                })
                 .setNegativeButton("Not now", null)
                 .show();
         }, 350);
