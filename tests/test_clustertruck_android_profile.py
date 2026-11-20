@@ -72,8 +72,8 @@ class ClustertruckAndroidProfileTests(unittest.TestCase):
         workflow = read(".github/workflows/clustertruck-probe.yml")
         gradle = read("android/lasrecomp/app/build.gradle.kts")
         self.assertIn("bash android/deps/build_gen_deps.sh", workflow)
-        self.assertLess(workflow.index("bash android/deps/build_gen_deps.sh"),
-                        workflow.index(":app:assembleDebug"))
+        self.assertLess(workflow.index("Build the on-device generic game-code generator"),
+                        workflow.index("Build the actual Clustertruck Android app"))
         self.assertIn("the Android game-code builder is incomplete", gradle)
         self.assertIn('"lib/libunicorn.so"', gradle)
         self.assertIn('"python/libpymain.so"', gradle)
