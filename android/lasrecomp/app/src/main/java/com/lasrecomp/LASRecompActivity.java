@@ -42,6 +42,7 @@ import org.libsdl.app.SDLActivity;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -232,7 +233,7 @@ public class LASRecompActivity extends SDLActivity {
         if (top == null || top.length == 0) return;  // (an APK without it: android/deps/build_gen_deps.sh not run)
         String stamp;
         try (InputStream in = getAssets().open("gen.id")) {
-            stamp = "sha256:" + new String(in.readAllBytes(), java.nio.charset.StandardCharsets.US_ASCII).trim();
+            stamp = "sha256:" + new String(readFully(in), java.nio.charset.StandardCharsets.US_ASCII).trim();
         } catch (IOException missingFingerprint) {
             // Compatibility with APKs built before gen.id was introduced.
             try {
@@ -1311,7 +1312,7 @@ public class LASRecompActivity extends SDLActivity {
         return libs[0];
     }
 
-    private static String readSmall(File f) throws IOException {
+    // InputStream.readAllBytes() is unavailable on Android 11 (API 30); use a compatible loop.\n    private static byte[] readFully(InputStream in) throws IOException {\n        ByteArrayOutputStream out = new ByteArrayOutputStream();\n        byte[] buffer = new byte[8192];\n        for (int n; (n = in.read(buffer)) != -1; ) out.write(buffer, 0, n);\n        return out.toByteArray();\n    }\n\n    private static String readSmall(File f) throws IOException {
         try (InputStream in = new FileInputStream(f)) {
             return new String(in.readAllBytes());
         }
