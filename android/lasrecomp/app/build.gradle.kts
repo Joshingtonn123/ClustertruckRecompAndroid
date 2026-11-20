@@ -121,7 +121,7 @@ val prepareClustertruck by tasks.registering {
         val required = listOf(
             "zig/libzig.so",
             "python/libpymain.so",
-            "python/lib/libpython3.14.so",
+            "python/libpython3.14.so",
             "lib/libcapstone.so",
             "lib/libunicorn.so",
             "lib/liblz4.so"
