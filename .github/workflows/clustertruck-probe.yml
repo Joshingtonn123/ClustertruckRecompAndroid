@@ -68,6 +68,8 @@ jobs:
         run: bash ./android/probe/gradlew -p android/clustertruck-probe --no-daemon :app:testDebugUnitTest :app:assembleDebug
       - name: Build Android runtime dependencies (SDL3, shaderc, Vulkan headers)
         run: BUILD_JOBS=2 bash android/deps/build_deps.sh
+      - name: Build the on-device generic game-code generator and compiler
+        run: BUILD_JOBS=2 bash android/deps/build_gen_deps.sh
       - name: Build the actual Clustertruck Android app (experimental native mode)
         run: bash ./android/probe/gradlew -p android/lasrecomp --no-daemon :app:assembleDebug
       - name: Upload Clustertruck experimental APK

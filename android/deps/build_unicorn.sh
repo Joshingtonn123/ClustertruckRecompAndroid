@@ -8,10 +8,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 D=$PWD
-NDK=${ANDROID_NDK_LINUX:-$HOME/android-ndk-r30}
-[ -d "$NDK" ] || { echo "no Linux NDK at $NDK (android/deps/build_ffmpeg.sh fetches it)"; exit 1; }
-export PATH="$HOME/lasrecomp-tools/bin:$PATH"
-command -v cmake >/dev/null && command -v ninja >/dev/null || { echo "cmake / ninja: see the header"; exit 1; }
+SDK=${ANDROID_HOME:-$HOME/Android/Sdk}
+NDK=${ANDROID_NDK_LINUX:-${ANDROID_NDK:-$SDK/ndk/30.0.16248370}}
+CMAKE_DIR=${ANDROID_CMAKE_DIR:-$SDK/cmake/3.30.4/bin}
+[ -d "$NDK" ] || { echo "no Linux NDK at $NDK"; exit 1; }
+export PATH="$CMAKE_DIR:$HOME/lasrecomp-tools/bin:$PATH"
+command -v cmake >/dev/null && command -v ninja >/dev/null || { echo "cmake / ninja are required (Android SDK CMake or system packages)"; exit 1; }
 # QEMU's configure insists on a pkg-config binary, though unicorn needs no system package: an empty one that finds none
 if ! command -v pkg-config >/dev/null; then
     mkdir -p "$HOME/lasrecomp-tools/bin"
@@ -29,7 +31,7 @@ cmake -S "$W/src" -B "$W/build" -G Ninja -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmak
     -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-30 -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384 \
     -DUNICORN_ARCH=aarch64 -DUNICORN_BUILD_TESTS=OFF -DUNICORN_INSTALL=OFF -DBUILD_SHARED_LIBS=ON
-cmake --build "$W/build"
+cmake --build "$W/build" --parallel "${BUILD_JOBS:-2}"
 mkdir -p "$D/out/gen/lib"
 cp -L "$(ls "$W"/build/libunicorn.so* | head -1)" "$D/out/gen/lib/libunicorn.so"
 "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" --strip-unneeded "$D/out/gen/lib/libunicorn.so"

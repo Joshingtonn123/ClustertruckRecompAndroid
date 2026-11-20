@@ -24,6 +24,11 @@ SDK=${SDK//\\//}
 NDK=${ANDROID_NDK:-$SDK/ndk/30.0.16248370}
 CMAKE_DIR=$SDK/cmake/3.30.4/bin
 API=30
+JOBS=${BUILD_JOBS:-2}
+# Unicorn's QEMU sub-build also needs the same NDK and CMake/Ninja selected above.
+export ANDROID_NDK_LINUX="$NDK"
+export ANDROID_CMAKE_DIR="$CMAKE_DIR"
+export PATH="$CMAKE_DIR:$PATH"
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE=.exe; HOST=windows-x86_64 ;; Darwin) EXE=; HOST=darwin-x86_64 ;; *) EXE=; HOST=linux-x86_64 ;; esac
 CMAKE=$CMAKE_DIR/cmake$EXE
 ANDROID_CMAKE=(-G Ninja -DCMAKE_MAKE_PROGRAM="$CMAKE_DIR/ninja$EXE" -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake"
@@ -68,7 +73,7 @@ if [ ! -f "$P/lib/libcapstone.so" ]; then
     unpack capstone-5.0.9.tar.gz capstone
     "$CMAKE" -S "$W/capstone" -B "$W/capstone/build" "${ANDROID_CMAKE[@]}" -DBUILD_SHARED_LIBS=ON \
         -DCAPSTONE_BUILD_TESTS=OFF -DCAPSTONE_BUILD_CSTOOL=OFF -DCAPSTONE_ARCHITECTURE_DEFAULT=OFF -DCAPSTONE_ARM64_SUPPORT=ON
-    "$CMAKE" --build "$W/capstone/build"
+    "$CMAKE" --build "$W/capstone/build" --parallel "$JOBS"
     cp "$W/capstone/build/libcapstone.so" "$P/lib/"
 fi
 
@@ -86,7 +91,7 @@ fi
 if [ ! -f "$P/lib/liblz4.so" ]; then
     unpack lz4-1.10.0.tar.gz lz4
     "$CMAKE" -S "$W/lz4/build/cmake" -B "$W/lz4/b" "${ANDROID_CMAKE[@]}" -DBUILD_SHARED_LIBS=ON -DBUILD_STATIC_LIBS=OFF -DLZ4_BUILD_CLI=OFF
-    "$CMAKE" --build "$W/lz4/b"
+    "$CMAKE" --build "$W/lz4/b" --parallel "$JOBS"
     cp "$(ls "$W"/lz4/b/liblz4.so* | head -1)" "$P/lib/liblz4.so"
 fi
 for f in "$P"/lib/*.so; do "$STRIP" --strip-unneeded "$f"; done

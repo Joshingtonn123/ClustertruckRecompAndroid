@@ -68,6 +68,16 @@ class ClustertruckAndroidProfileTests(unittest.TestCase):
         self.assertLess(loader.index("HostFn impl = hle_lookup_impl(name);"),
                         loader.index("if ((s->info >> 4) == 2) return 0;"))
 
+    def test_android_workflow_builds_and_requires_the_on_device_generator(self):
+        workflow = read(".github/workflows/clustertruck-probe.yml")
+        gradle = read("android/lasrecomp/app/build.gradle.kts")
+        self.assertIn("bash android/deps/build_gen_deps.sh", workflow)
+        self.assertLess(workflow.index("bash android/deps/build_gen_deps.sh"),
+                        workflow.index(":app:assembleDebug"))
+        self.assertIn("the Android game-code builder is incomplete", gradle)
+        self.assertIn('"lib/libunicorn.so"', gradle)
+        self.assertIn('"python/libpymain.so"', gradle)
+
     def test_import_flow_is_clustertruck_scoped_and_does_not_claim_package_extraction(self):
         activity = read("android/lasrecomp/app/src/main/java/com/lasrecomp/LASRecompActivity.java")
         launcher = read("runtime/ui/launcher.mm")

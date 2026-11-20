@@ -95,7 +95,8 @@ val prepareClustertruck by tasks.registering {
     val libs = listOf("libSDL3.so", "libshaderc_shared.so", "libavcodec.so", "libavformat.so", "libavutil.so", "libswscale.so")
     inputs.files(smaa, font, project.file("build.gradle.kts"))
     inputs.files(libs.map { deps.resolve("lib/$it") }.filter { it.exists() })
-    if (deps.resolve("gen").exists()) inputs.dir(deps.resolve("gen"))  // (the game code's builder, below)
+    inputs.dir(deps.resolve("gen"))  // (the game code's builder, required for Recompiled mode)
+    outputs.upToDateWhen { false }  // revalidate and package every pinned generator dependency build
     inputs.files(listOf("tools/gen.py", "tools/lifter.py", "tools/analyze.py", "tools/nso.py", "tools/passes.py",
                         "tools/simd_c.py", "tools/gamelib_entry.c",
                         "runtime/cpu.h", "runtime/simd.h", "runtime/simd_fp.h", "runtime/gamelib.h",
@@ -117,7 +118,32 @@ val prepareClustertruck by tasks.registering {
         // libraries as native libraries (Android runs binaries only from nativeLibraryDir), the rest as assets/gen
         // (runtime/gamebuild.c; unpacked by LASRecompActivity)
         val g = deps.resolve("gen")
-        if (g.resolve("zig/libzig.so").exists()) {
+        val required = listOf(
+            "zig/libzig.so",
+            "python/libpymain.so",
+            "python/lib/libpython3.14.so",
+            "lib/libcapstone.so",
+            "lib/libunicorn.so",
+            "lib/liblz4.so"
+        ).map { g.resolve(it) }
+        val requiredDirs = listOf(
+            "python/lib/python3.14",
+            "site/capstone",
+            "site/unicorn",
+            "site/lz4",
+            "zig/lib/include",
+            "zig/lib/std",
+            "zig/lib/compiler_rt",
+            "zig/lib/libc/include"
+        ).map { g.resolve(it) }
+        val missing = (required.filterNot { it.isFile } + requiredDirs.filterNot { it.isDirectory })
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "The Android game-code builder is incomplete. Run android/deps/build_gen_deps.sh first. Missing: " +
+                    missing.joinToString { it.relativeTo(repo).invariantSeparatorsPath }
+            )
+        }
+        run {
             val jni = out.resolve("jniLibs/arm64-v8a")
             for (f in listOf(g.resolve("zig/libzig.so"), g.resolve("python/libpymain.so"), g.resolve("python/libpython3.14.so")) +
                      (g.resolve("lib").listFiles() ?: arrayOf()).filter { it.name.endsWith(".so") })
