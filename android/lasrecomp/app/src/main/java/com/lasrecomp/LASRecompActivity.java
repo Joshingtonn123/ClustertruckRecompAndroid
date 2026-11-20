@@ -1312,9 +1312,17 @@ public class LASRecompActivity extends SDLActivity {
         return libs[0];
     }
 
-    // InputStream.readAllBytes() is unavailable on Android 11 (API 30); use a compatible loop.\n    private static byte[] readFully(InputStream in) throws IOException {\n        ByteArrayOutputStream out = new ByteArrayOutputStream();\n        byte[] buffer = new byte[8192];\n        for (int n; (n = in.read(buffer)) != -1; ) out.write(buffer, 0, n);\n        return out.toByteArray();\n    }\n\n    private static String readSmall(File f) throws IOException {
+    // InputStream.readAllBytes() is unavailable on Android 11 (API 30); use a compatible loop.
+    private static byte[] readFully(InputStream in) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        for (int n; (n = in.read(buffer)) != -1; ) out.write(buffer, 0, n);
+        return out.toByteArray();
+    }
+
+    private static String readSmall(File f) throws IOException {
         try (InputStream in = new FileInputStream(f)) {
-            return new String(in.readAllBytes());
+            return new String(readFully(in));
         }
     }
 
