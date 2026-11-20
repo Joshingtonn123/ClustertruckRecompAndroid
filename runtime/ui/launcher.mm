@@ -348,7 +348,7 @@ static float extract_progress(void) {
 static bool build_game_code(bool force_recompile = false) {
 #ifdef __ANDROID__
     bool native = native_wanted();
-    fprintf(stderr, "[launcher] game code path: %s%s\\n", native ? "native" : "recompiled",
+    fprintf(stderr, "[launcher] game code path: %s%s\n", native ? "native" : "recompiled",
             force_recompile ? " (recompile-only import)" : "");
     // Native mode executes the original ARM64 modules. It must never require the static generator, even when the
     // importer labels an ExeFS-only selection as a recompile-only operation.
@@ -625,13 +625,13 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_lasrecomp_LASRecompActivity_nativ
 #ifdef CLUSTERTRUCK_GENERIC_TITLE
     char build_id[41];
     for (int i = 0; i < 20; i++) snprintf(build_id + i * 2, 3, "%02X", hdr[0x40 + i]);
-    fprintf(stderr, "[launcher] generic Clustertruck NSO accepted (build ID %s)\\n", build_id);
+    fprintf(stderr, "[launcher] generic Clustertruck NSO accepted (build ID %s)\n", build_id);
     return JNI_TRUE;
 #else
     uint8_t b[20];  // (the main program's build ID: a supported version, runtime/game_addresses/versions.h)
     memcpy(b, hdr + 0x40, sizeof b);
     const GameVersion *v = game_version_by_build_id(b);
-    fprintf(stderr, "[launcher] game files: %s%s\\n", v ? "version " : "an unsupported version", v ? v->label : "");
+    fprintf(stderr, "[launcher] game files: %s%s\n", v ? "version " : "an unsupported version", v ? v->label : "");
     return v ? JNI_TRUE : JNI_FALSE;
 #endif
 }
