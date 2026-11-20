@@ -18,6 +18,7 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
 
     <application
+        android:name=".ClustertruckApplication"
         android:label="Clustertruck Recomp (Experimental)"
         android:icon="@drawable/ic_clustertruck"
         android:allowBackup="false"
