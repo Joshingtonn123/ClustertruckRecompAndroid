@@ -139,7 +139,7 @@ val prepareClustertruck by tasks.registering {
         val missing = (required.filterNot { it.isFile } + requiredDirs.filterNot { it.isDirectory })
         if (missing.isNotEmpty()) {
             throw GradleException(
-                "The Android game-code builder is incomplete. Run android/deps/build_gen_deps.sh first. Missing: " +
+                "the Android game-code builder is incomplete. Run android/deps/build_gen_deps.sh first. Missing: " +
                     missing.joinToString { it.relativeTo(repo).invariantSeparatorsPath }
             )
         }
