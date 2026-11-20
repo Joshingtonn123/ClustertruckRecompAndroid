@@ -65,13 +65,43 @@ jobs:
       - name: Install Android 36 platform
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.16248370" "cmake;3.30.4"
       - name: Test and build the Android 11-compatible dump probe
-        run: bash ./android/probe/gradlew -p android/clustertruck-probe --no-daemon :app:testDebugUnitTest :app:assembleDebug
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            set +e
+            bash ./android/probe/gradlew -p android/clustertruck-probe --no-daemon :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee /tmp/clustertruck-probe-gradle.log
+            result=${PIPESTATUS[0]}
+            set -e
+            if [ "$result" -eq 0 ]; then exit 0; fi
+            if [ "$attempt" -lt 3 ] && grep -Eqi 'Could not find|Could not resolve|Could not GET|HTTP[^0-9]*(429|5[0-9][0-9])|timed out|Temporary failure' /tmp/clustertruck-probe-gradle.log; then
+              echo "Dependency repository failure; retrying Gradle (attempt $((attempt + 1))/3)."
+              sleep $((attempt * 15))
+            else
+              exit "$result"
+            fi
+          done
+          exit 1
       - name: Build Android runtime dependencies (SDL3, shaderc, Vulkan headers)
         run: BUILD_JOBS=2 bash android/deps/build_deps.sh
       - name: Build the on-device generic game-code generator and compiler
         run: BUILD_JOBS=2 bash android/deps/build_gen_deps.sh
       - name: Build the actual Clustertruck Android app (experimental native mode)
-        run: bash ./android/probe/gradlew -p android/lasrecomp --no-daemon :app:assembleDebug
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            set +e
+            bash ./android/probe/gradlew -p android/lasrecomp --no-daemon :app:assembleDebug 2>&1 | tee /tmp/clustertruck-app-gradle.log
+            result=${PIPESTATUS[0]}
+            set -e
+            if [ "$result" -eq 0 ]; then exit 0; fi
+            if [ "$attempt" -lt 3 ] && grep -Eqi 'Could not find|Could not resolve|Could not GET|HTTP[^0-9]*(429|5[0-9][0-9])|timed out|Temporary failure' /tmp/clustertruck-app-gradle.log; then
+              echo "Dependency repository failure; retrying Gradle (attempt $((attempt + 1))/3)."
+              sleep $((attempt * 15))
+            else
+              exit "$result"
+            fi
+          done
+          exit 1
       - name: Upload Clustertruck experimental APK
         uses: actions/upload-artifact@v4
         with:
