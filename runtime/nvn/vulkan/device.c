@@ -1634,8 +1634,7 @@ void ui_window_init(void) {
         extern void android_log_file(bool on);
         android_log_file(g_settings.log_file);
         // Turnip reads TU_DEBUG once, when it starts: low-resolution Z off (it can drop draws on some Adreno GPUs).
-        // Automatic needs the GPU before Vulkan names it: the kernel's (the GPU driver reads it from the app too), else
-        // the last start's; unknown: on.
+        // Automatic needs the GPU before Vulkan names it: the kernel, else the last start's. Unknown: off (safe default).
         int lrz = g_settings.turnip_lrz;
         char model[64] = "";
         if (lrz < 0) {
@@ -1646,7 +1645,7 @@ void ui_window_init(void) {
                 model[strcspn(model, "\r\n")] = 0;
             }
             if (!model[0]) snprintf(model, sizeof model, "%s", g_settings.gpu_model);
-            lrz = !model[0] || vk_lrz_auto(model);
+            lrz = model[0] && vk_lrz_auto(model);
         }
         g_lrz_at_start = lrz != 0;
         if (!lrz && !getenv("TU_DEBUG")) setenv("TU_DEBUG", "nolrz", 1);

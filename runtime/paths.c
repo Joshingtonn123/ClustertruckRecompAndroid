@@ -174,6 +174,9 @@ bool rt_remove_game_file(const char *game_dir, const char *name) {
 }
 
 bool rt_remove_game_files(const char *game_dir) {
+    // A fresh install or a user-cleared app data directory has nothing to remove. Treat that as success; still refuse
+    // any existing path that is not the app's own <data root>/extracted directory.
+    if (!exists(game_dir) && !is_link(game_dir)) return true;
     if (!game_dir_ok(game_dir)) {
         fprintf(stderr, "[paths] refusing to delete game files in %s (not <data root>/extracted)\n", game_dir);
         return false;

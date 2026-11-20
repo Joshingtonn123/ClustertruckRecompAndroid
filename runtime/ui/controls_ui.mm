@@ -53,8 +53,12 @@ extern "C" void touch_layout_reset(void);
 static void touch_layout_draw(void) {
     ImGui::TextUnformatted(tr("No controller connected: the on-screen controls"));
     ImGui::PushTextWrapPos(0);
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    ImGui::TextDisabled("%s", tr("Move the on-screen buttons and stick to your preferred positions. Drag them on the next screen, then tap Done to save."));
+#else
     ImGui::TextDisabled("%s", tr("Move the buttons and the stick where your thumbs like them. Connect a controller to remap "
                                  "its buttons instead."));
+#endif
     ImGui::PopTextWrapPos();
     ImGui::Spacing();
     bool can = touch_edit_available();
@@ -66,8 +70,7 @@ static void touch_layout_draw(void) {
     ImGui::BeginDisabled(def);
     if (ImGui::Button(tr("Reset layout to defaults"), ImVec2(-1, 0))) touch_layout_reset();
     ImGui::EndDisabled();
-    if (!can) ImGui::TextDisabled("%s", tr(g_settings.touch_controls ? "Get into the game to edit the layout."
-                                                                     : "Turn on Touch controls (Video tab) to edit the layout."));
+    if (!can) ImGui::TextDisabled("%s", tr("Turn on Touch controls (Video tab) to edit the layout."));
     ImGui::Spacing();
     float sz = g_settings.touch_scale * 100, op = g_settings.touch_opacity * 100;
     ImGui::TextUnformatted(tr("Button size"));
@@ -85,6 +88,7 @@ static void touch_layout_draw(void) {
     ImGui::TextDisabled("%s", tr("The stick stays where the layout puts it. Off: it starts wherever your thumb lands on the "
                                  "left of the screen."));
     ImGui::PopTextWrapPos();
+#ifndef CLUSTERTRUCK_GENERIC_TITLE
     if (ImGui::Checkbox(tr("Only the buttons the game uses"), &g_settings.touch_context)) settings_save();
     ImGui::PushTextWrapPos(0);
     ImGui::TextDisabled("%s", tr("B, R and L show once Link has the sword, the shield and the Pegasus Boots, X and Y once "
@@ -98,6 +102,7 @@ static void touch_layout_draw(void) {
                                  "on L and the equipped items on X and Y, with the button's letter on a badge. Off: the "
                                  "island look."));
     ImGui::PopTextWrapPos();
+#endif
 }
 #endif
 

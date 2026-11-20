@@ -55,7 +55,6 @@ static atomic_bool used;  // a touch since the last controller: show the control
 static atomic_bool hide_auto;  // a controller is connected (as of the last event or check)
 static atomic_bool editing;
 static float edit_pos[K_N][2];  // (editing) the layout being edited
-static _Atomic uint64_t last_draw_ms;
 
 static void default_pos(int k, float *x, float *y) {  // in pixels
     float w = disp_w, h = disp_h, u = h / 100.0f, gap = 13.0f * u, fx = w - 20 * u, fy = h - 27 * u, sw = 15 * u;
@@ -89,6 +88,11 @@ static float stick_radius(void) { return disp_h * 0.13f * size_scale(); }
 // slots), ZL / ZR only where the player put them. The title, the file select and the Items page show everything (X / Y
 // equip there). Editing shows everything.
 static bool ctl_wanted(int k) {
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    // The filtered button rules below read Zelda live-save addresses and must never run for a different title.
+    (void)k;
+    return true;
+#else
     if (editing || !g_settings.touch_context || !game_in_play() || inventory_items_cursor() >= 0) return true;
     switch (k) {
     case K_B: case K_R: case K_L: {
@@ -102,12 +106,17 @@ static bool ctl_wanted(int k) {
     case K_ZL: case K_ZR: return g_settings.touch_pos[k][0] >= 0;
     default: return true;
     }
+#endif
 }
 
 static int layout(Ctl *c) {  // in pixels of the window (landscape)
     float u = disp_h / 100.0f, z = size_scale();
     float br = 7.5f * u * z, sw = 15 * u * z, sh = 7 * u * z, sr = 4.5f * u * z;
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    bool bubbles = false;
+#else
     bool bubbles = g_settings.touch_icons;  // (the bubbles: round shoulders)
+#endif
     static const struct { int k, bit; const char *label; int shape; } T[] = {
         {K_A, TB_A, "A", 0}, {K_B, TB_B, "B", 0}, {K_X, TB_X, "X", 0}, {K_Y, TB_Y, "Y", 0},
         {K_L, TB_L, "L", 1}, {K_ZL, TB_ZL, "ZL", 1}, {K_R, TB_R, "R", 1}, {K_ZR, TB_ZR, "ZR", 1},
@@ -207,10 +216,12 @@ static bool overlay_drag(const SDL_Event *e, float x, float y) {  // true: the f
     return true;
 }
 
-// ---- layout editing (the Controls tab)
-extern "C" bool touch_edit_available(void) {  // the overlay is up (in game): there is something to drag
-    return SDL_GetTicks() - last_draw_ms < 500 && g_settings.touch_controls;
+// ---- layout editing (the Controls tab, in-game or from the launcher's Controls page)
+extern "C" bool touch_edit_available(void) {
+    return g_settings.touch_controls;
 }
+
+extern "C" bool touch_layout_editing(void) { return editing.load(); }
 
 extern "C" void touch_edit_begin(void) {
     memcpy(edit_pos, g_settings.touch_pos, sizeof edit_pos);
@@ -449,7 +460,6 @@ static void bubble_ctl(ImDrawList *dl, ImFont *font, const Ctl &c, bool on, floa
 // Drawn with the in-game overlay (ui/menu.mm menu_render), between ImGui's NewFrame and Render.
 extern "C" void touch_controls_draw(ImVec2 display, ImFont *font) {
     disp_w = display.x, disp_h = display.y;
-    last_draw_ms = SDL_GetTicks();
     if (!touch_controls_visible()) return;
     ImDrawList *dl = ImGui::GetForegroundDrawList();
     Ctl c[20];
@@ -458,6 +468,10 @@ extern "C" void touch_controls_draw(ImVec2 display, ImFont *font) {
     float u = disp_h / 100.0f;
     float op = g_settings.touch_opacity > 0.05f ? g_settings.touch_opacity : 1.0f;
     float alpha = (used || editing ? 1.0f : 0.6f) * op;
+    bool icons = g_settings.touch_icons;
+#ifdef CLUSTERTRUCK_GENERIC_TITLE
+    icons = false;
+#endif
     // Island inventory palette, kept translucent over the game. Every layer follows
     // the player's opacity; pressed controls use green as well as a brighter rim.
     ImU32 fill = IM_COL32(244, 235, 207, (int)(60 * alpha));
@@ -479,7 +493,7 @@ extern "C" void touch_controls_draw(ImVec2 display, ImFont *font) {
     for (int i = 0; i < n; i++) {
         bool bar = c[i].bit >= C_DONE && c[i].bit <= C_CANCEL;
         bool on = c[i].bit >= 0 && c[i].bit < 16 && (held >> c[i].bit & 1);
-        if (g_settings.touch_icons && !bar) { bubble_ctl(dl, font, c[i], on, alpha, th); continue; }
+        if (icons && !bar) { bubble_ctl(dl, font, c[i], on, alpha, th); continue; }
         float fs = (c[i].rect ? c[i].h * (bar ? 0.45f : 0.6f) : c[i].r * 0.9f);
         ImVec2 ts = font->CalcTextSizeA(fs, FLT_MAX, 0, c[i].label);
         ImU32 f = bar ? IM_COL32(55, 86, 53, 240) : on ? fill_on : fill;
@@ -516,7 +530,7 @@ extern "C" void touch_controls_draw(ImVec2 display, ImFont *font) {
     float cx = on ? stick_cx : rx, cy = on ? stick_cy : ry, kx = on ? stick_kx : cx, ky = on ? stick_ky : cy;
     pthread_mutex_unlock(&t_lock);
     float R = stick_radius();
-    if (g_settings.touch_icons) { compass(dl, ImVec2(cx, cy), R, ImVec2(kx, ky), alpha, th); return; }
+    if (icons) { compass(dl, ImVec2(cx, cy), R, ImVec2(kx, ky), alpha, th); return; }
     dl->AddCircleFilled(ImVec2(cx, cy), R, fill, 48);
     dl->AddCircle(ImVec2(cx, cy), R, line, 48, 0.3f * u);
     dl->AddCircle(ImVec2(cx, cy), R - 0.55f * u, trim, 48, 0.15f * u);

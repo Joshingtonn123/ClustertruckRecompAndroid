@@ -220,6 +220,9 @@ static std::string check_copied_files(const std::string &root) {
 
 #ifdef __ANDROID__
 extern "C" bool native_wanted(void);  // (Native game code: nothing to build - runtime/native.c)
+extern "C" bool touch_layout_editing(void);  // ui/touch_controls.mm
+extern "C" bool touch_controls_event(const SDL_Event *e);
+extern "C" void touch_controls_draw(ImVec2 display, ImFont *font);
 #endif
 
 // "" = ready to play, else what is wrong
@@ -344,7 +347,12 @@ static float extract_progress(void) {
 // Builds the game code from the copied files (a few minutes); false = failed (the job line says so)
 static bool build_game_code(bool force_recompile = false) {
 #ifdef __ANDROID__
-    if (!force_recompile && native_wanted()) return true;  // (the game's own code runs as it is)
+    bool native = native_wanted();
+    fprintf(stderr, "[launcher] game code path: %s%s\\n", native ? "native" : "recompiled",
+            force_recompile ? " (recompile-only import)" : "");
+    // Native mode executes the original ARM64 modules. It must never require the static generator, even when the
+    // importer labels an ExeFS-only selection as a recompile-only operation.
+    if (native) return true;
 #endif
     int cores = SDL_GetNumLogicalCPUCores(), ram_gb = SDL_GetSystemRAM() / 1024;
     int jobs = cores < ram_gb - 2 ? cores : ram_gb - 2 > 1 ? ram_gb - 2 : 1;
@@ -385,7 +393,10 @@ static void *extract_thread(void *) {
         bool recompile_only = g_android_recompile_only.exchange(false);
         if (!build_game_code(recompile_only)) goto done;
         if (recompile_only) {
-            set_job("Generic recompilation finished. Native game code was generated; boot support is still in progress.");
+            if (native_wanted())
+                set_job("Native mode selected. Static game-code compilation was skipped; import a valid dump with both ExeFS and RomFS before Play.");
+            else
+                set_job("Generic recompilation finished. Native game code was generated; boot support is still in progress.");
             goto done;
         }
         extern void android_drop_same_release(void);
@@ -1954,6 +1965,17 @@ extern "C" void launcher_run(const char *root) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (page == SETTINGS && bind_capture_event(&e)) continue;  // (waiting for a new binding: controls_ui.mm)
+#ifdef __ANDROID__
+            if (touch_layout_editing()) {
+                if (touch_controls_event(&e)) continue;  // (the Controls tab's editor works on the start screen too)
+                // SDL also emits a synthetic mouse event for each finger event; don't let it activate the page behind
+                // the draggable touch controls.
+                if ((e.type == SDL_EVENT_MOUSE_MOTION && e.motion.which == SDL_TOUCH_MOUSEID) ||
+                    ((e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP) &&
+                     e.button.which == SDL_TOUCH_MOUSEID))
+                    continue;
+            }
+#endif
             if (!launcher_pad_event(e)) ImGui_ImplSDL3_ProcessEvent(&e);
             if (e.type == SDL_EVENT_QUIT) exit(0);
         }
@@ -2730,6 +2752,10 @@ extern "C" void launcher_run(const char *root) {
             ImGui::PopStyleColor();
             osk_draw(g_font_menu, s * 0.7f);  // (a text field activated with the controller)
             typed_before = ui_text_busy();
+#ifdef __ANDROID__
+            // The Controls page can open the same editor from the start screen; its finger events are routed above.
+            if (touch_layout_editing()) touch_controls_draw(io.DisplaySize, g_font_menu ? g_font_menu : ImGui::GetFont());
+#endif
 
             ImGui::Render();
 #ifdef __APPLE__
