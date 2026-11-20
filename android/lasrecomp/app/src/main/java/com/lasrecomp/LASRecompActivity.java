@@ -113,12 +113,15 @@ public class LASRecompActivity extends SDLActivity {
 
     @Override
     protected String[] getLibraries() {
+        ClustertruckApplication.record("SDL requested native libraries: SDL3, shaderc_shared, main");
         return new String[] {"SDL3", "shaderc_shared", "main"};
     }
 
     @Override
     protected void onCreate(Bundle state) {
+        ClustertruckApplication.record("LASRecompActivity.onCreate entered");
         try {
+            ClustertruckApplication.record("Activity setup: copying bundled resources");
             File res = new File(getFilesDir(), "res");
             copyAssets("res", res);
             File games = new File(getExternalFilesDir(null), "extracted");
@@ -127,6 +130,7 @@ public class LASRecompActivity extends SDLActivity {
             setenv("LARECOMP_NATIVE_LIB_DIR", getApplicationInfo().nativeLibraryDir);
             File gen = new File(getFilesDir(), "gen");
             unpackGen(gen);
+            ClustertruckApplication.record("Activity setup: resources and game-code generator prepared");
             setenv("LARECOMP_GEN_DIR", gen.getAbsolutePath());
             if (getIntent() != null && SYSTEM_DRIVER.equals(getIntent().getAction())) dropCustomDriver();
             File driver = customDriver();
@@ -155,10 +159,21 @@ public class LASRecompActivity extends SDLActivity {
                 }
             }
         } catch (IOException | ErrnoException e) {
+            ClustertruckApplication.record("Activity setup IOException/ErrnoException: " + Log.getStackTraceString(e));
             Log.e(TAG, "setup: " + e);
+        } catch (RuntimeException | LinkageError e) {
+            ClustertruckApplication.record("Activity setup failed: " + Log.getStackTraceString(e));
+            throw e;
         }
         self = this;
-        super.onCreate(state);
+        ClustertruckApplication.record("Calling SDLActivity.onCreate; native library loading may begin now");
+        try {
+            super.onCreate(state);
+            ClustertruckApplication.record("SDLActivity.onCreate returned successfully");
+        } catch (RuntimeException | LinkageError e) {
+            ClustertruckApplication.record("SDLActivity.onCreate failed: " + Log.getStackTraceString(e));
+            throw e;
+        }
         // SDL's own immersive full screen (no status / navigation bar, the camera cutout used): SDL's onCreate asks
         // for the windowed style, and keeps the bars hidden once its full screen mode is on
         setWindowStyle(true);
@@ -166,6 +181,7 @@ public class LASRecompActivity extends SDLActivity {
 
     @Override
     protected void onResume() {
+        ClustertruckApplication.record("LASRecompActivity.onResume entered");
         super.onResume();
         stats.post(report);
         PlayService.start(this);  // (keeps the game alive at the home screen: PlayService.java)
