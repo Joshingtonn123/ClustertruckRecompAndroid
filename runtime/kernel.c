@@ -187,8 +187,35 @@ static uint64_t next_thread_id = 0x50;
 volatile int g_rt_unwind;
 static KThread *g_threads;  // every thread of this boot (g_klock)
 
+#ifdef __ANDROID__
+static void core0_acquire(KThread *t);
+static void core0_release(KThread *t);
+#endif
+
 void rt_unwind_point(void) {
     if (__builtin_expect(g_rt_unwind, 0) && t_cur) longjmp(t_cur->unwind, 1);
+    if (!t_cur) return;
+
+    // SetThreadActivity is cooperative: guest execution reaches this checkpoint at
+    // SVC entry/exit and HLE calls. Drop core 0 while paused so another guest thread
+    // can run, then reacquire it when this thread is resumed.
+    pthread_mutex_lock(&g_klock);
+    bool paused = t_cur->paused;
+    pthread_mutex_unlock(&g_klock);
+    if (!paused) return;
+
+#ifdef __ANDROID__
+    core0_release(t_cur);
+#endif
+    pthread_mutex_lock(&g_klock);
+    while (t_cur->paused && !g_rt_unwind)
+        pthread_cond_wait(&t_cur->cond, &g_klock);
+    bool unwind = g_rt_unwind;
+    pthread_mutex_unlock(&g_klock);
+#ifdef __ANDROID__
+    core0_acquire(t_cur);
+#endif
+    if (unwind) longjmp(t_cur->unwind, 1);
 }
 
 #ifdef __ANDROID__
@@ -787,6 +814,18 @@ static void svc_impl(Cpu *c, uint32_t imm, uint64_t pc) {
     }
     case 0x0F: x[0] = R_OK; break;  // SetThreadCoreMask
     case 0x10: x[0] = t_cur->core; break;  // GetCurrentProcessorNumber
+    case 0x32: {  // SetThreadActivity(handle, activity): 0 = runnable, 1 = paused
+        KObject *o = handle_get((uint32_t)x[0]);
+        if (!o || o->type != KOBJ_THREAD) { x[0] = R_INVALID_HANDLE; break; }
+        if (x[1] > 1) { x[0] = R_INVALID_ENUM; break; }
+        KThread *t = (KThread *)o;
+        pthread_mutex_lock(&g_klock);
+        t->paused = (x[1] == 1);
+        if (!t->paused) wake(t);
+        pthread_mutex_unlock(&g_klock);
+        x[0] = R_OK;
+        break;
+    }
     case 0x11: case 0x12: case 0x17: {  // SignalEvent / ClearEvent / ResetSignal
         pthread_mutex_lock(&g_klock);
         KObject *o = handle_get((uint32_t)x[0]);
