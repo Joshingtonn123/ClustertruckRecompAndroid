@@ -9,15 +9,14 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Writes a small startup/crash breadcrumb log before SDL loads native libraries.
- * The report is stored beside the existing native runtime logs in the app's files/logs directory.
+ * Writes startup/crash breadcrumbs before SDL loads native libraries.
+ * Keep logs beside the app's existing logs under Android/data/.../files/logs.
  */
 public final class ClustertruckApplication extends Application {
     private static final String TAG = "ClustertruckStartup";
@@ -26,7 +25,7 @@ public final class ClustertruckApplication extends Application {
     private static final Object LOCK = new Object();
 
     private static ClustertruckApplication instance;
-    private static File fallbackLog;
+    private static File logFile;
 
     @Override
     public void onCreate() {
@@ -35,7 +34,7 @@ public final class ClustertruckApplication extends Application {
 
         synchronized (LOCK) {
             try {
-                initLogFiles();
+                initLog();
                 writeLocked("==================================================");
                 writeLocked("Application.onCreate; package=" + getPackageName()
                         + "; Android=" + Build.VERSION.RELEASE
@@ -43,9 +42,8 @@ public final class ClustertruckApplication extends Application {
                         + "; ABI=" + Build.SUPPORTED_ABIS[0]);
                 writePreviousExitReasonsLocked();
             } catch (Throwable t) {
-                Log.e(TAG, "Could not initialize public startup log", t);
-                initFallback();
-                writeLocked("Startup logger fallback: " + Log.getStackTraceString(t));
+                Log.e(TAG, "Could not initialize startup log", t);
+                Log.i(TAG, "Startup logger initialization failed: " + Log.getStackTraceString(t));
             }
         }
 
@@ -55,6 +53,24 @@ public final class ClustertruckApplication extends Application {
             if (previous != null) previous.uncaughtException(thread, error);
         });
         record("Java uncaught-exception handler installed");
+    }
+
+    private static void initLog() throws Exception {
+        File dir = instance.getExternalFilesDir("logs");
+        if (dir == null) dir = new File(instance.getFilesDir(), "logs");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IllegalStateException("Could not create log directory: " + dir);
+        }
+
+        File current = new File(dir, LOG_NAME);
+        File previous = new File(dir, PREVIOUS_NAME);
+        if (previous.exists() && !previous.delete()) {
+            Log.w(TAG, "Could not delete previous startup log");
+        }
+        if (current.exists() && !current.renameTo(previous)) {
+            Log.w(TAG, "Could not rotate previous startup log");
+        }
+        logFile = current;
     }
 
     /** Safe to call from the Activity before SDL/native loading starts. */
@@ -68,32 +84,15 @@ public final class ClustertruckApplication extends Application {
         }
     }
 
-    private static void initLogFiles() throws Exception {
-        File dir = instance.getExternalFilesDir("logs");
-        if (dir == null) dir = new File(instance.getFilesDir(), "logs");
-        if (!dir.exists() && !dir.mkdirs()) {
-            throw new IllegalStateException("Could not create app logs directory: " + dir);
-        }
-        fallbackLog = new File(dir, LOG_NAME);
-        File previous = new File(dir, PREVIOUS_NAME);
-        if (previous.exists() && !previous.delete()) {
-            Log.w(TAG, "Could not remove previous startup log");
-        }
-        if (fallbackLog.exists() && !fallbackLog.renameTo(previous)) {
-            Log.w(TAG, "Could not rotate previous startup log");
-        }
-    }
-
     private static void writeLocked(String message) {
         String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(new Date());
-        byte[] bytes = (stamp + " " + message + "\n").getBytes(StandardCharsets.UTF_8);
+        String line = stamp + " " + message + "\n";
         try {
-            if (fallbackLog != null) {
-                try (FileOutputStream out = new FileOutputStream(fallbackLog, true)) {
-                    out.write(bytes);
-                    out.flush();
-                    out.getFD().sync();
-                }
+            if (logFile == null) initLog();
+            try (FileOutputStream out = new FileOutputStream(logFile, true)) {
+                out.write(line.getBytes("UTF-8"));
+                out.flush();
+                out.getFD().sync();
             }
         } catch (Throwable t) {
             Log.e(TAG, "Could not append startup log", t);
@@ -139,8 +138,7 @@ public final class ClustertruckApplication extends Application {
             int n;
             writeLocked("PREVIOUS PROCESS TRACE BEGIN");
             while (total < 65536 && (n = in.read(buffer, 0, Math.min(buffer.length, 65536 - total))) > 0) {
-                String part = new String(buffer, 0, n, StandardCharsets.UTF_8);
-                writeLocked(part);
+                writeLocked(new String(buffer, 0, n, "UTF-8"));
                 total += n;
             }
             writeLocked("PREVIOUS PROCESS TRACE END; bytes=" + total);
