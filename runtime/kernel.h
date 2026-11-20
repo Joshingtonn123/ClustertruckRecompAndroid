@@ -30,6 +30,7 @@ struct KThread {
     uint32_t handle;
     int prio, core;
     bool cancel, in_sync_wait;
+    bool paused;             // SetThreadActivity: cooperatively pause at kernel/HLE safe points
     // wait state (protected by g_klock)
     WaitKind wait_kind;
     uint64_t wait_addr, wait_mutex;
