@@ -77,6 +77,29 @@ class ClustertruckAndroidProfileTests(unittest.TestCase):
         self.assertIn("the Android game-code builder is incomplete", gradle)
         self.assertIn('"lib/libunicorn.so"', gradle)
         self.assertIn('"python/libpymain.so"', gradle)
+        self.assertIn('"python/libpython3.14.so"', gradle)
+        self.assertIn('"python/lib/python3.14"', gradle)
+
+    def test_native_mode_never_invokes_static_generator_for_exefs_only_imports(self):
+        launcher = read("runtime/ui/launcher.mm")
+        start = launcher.index("static bool build_game_code(bool force_recompile = false)")
+        end = launcher.index("// ------------------------------------------------------------------", start)
+        build = launcher[start:end]
+        self.assertIn("bool native = native_wanted();", build)
+        self.assertIn("if (native) return true;", build)
+        self.assertIn("if (native_wanted())", launcher)
+        self.assertIn("Static game-code compilation was skipped", launcher)
+
+    def test_android_touch_layout_editor_is_available_from_launcher_controls(self):
+        controls = read("runtime/ui/controls_ui.mm")
+        touch = read("runtime/ui/touch_controls.mm")
+        launcher = read("runtime/ui/launcher.mm")
+        self.assertIn("return g_settings.touch_controls;", touch)
+        self.assertIn('extern "C" bool touch_layout_editing(void)', touch)
+        self.assertIn("touch_layout_editing()", launcher)
+        self.assertIn("touch_controls_event(&e)", launcher)
+        self.assertIn("touch_controls_draw(io.DisplaySize", launcher)
+        self.assertIn("Move the on-screen buttons and stick", controls)
 
     def test_import_flow_is_clustertruck_scoped_and_does_not_claim_package_extraction(self):
         activity = read("android/lasrecomp/app/src/main/java/com/lasrecomp/LASRecompActivity.java")
