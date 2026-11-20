@@ -148,6 +148,9 @@ static void boot(const char *root) {
     snprintf(romfs, sizeof romfs, "%s/romfs", root);
     snprintf(npdm_path, sizeof npdm_path, "%s/main.npdm", exefs);
 #ifdef __ANDROID__
+    LOG("[boot] begin: root=%s exefs=%s\n", root, exefs);
+#endif
+#ifdef __ANDROID__
     {   // the game files used in place: romfs.link names the player's own romfs/ (no romfs.bin; the movies and the
         // sheets from there too) - or their own romfs.bin, read as ours would be (the loose files taken out of it into
         // romfs/ at setup). romfs_build.h romfs_link_read; services/fs.c reads it.
@@ -161,23 +164,47 @@ static void boot(const char *root) {
     }
 #endif
     if (!g_romfs_dir) g_romfs_dir = strdup(romfs);
+#ifdef __ANDROID__
+    LOG("[boot] RomFS source: %s\n", g_romfs_dir ? g_romfs_dir : "(unavailable)");
+#endif
 
     char why[512];
+#ifdef __ANDROID__
+    LOG("[boot] selecting generic game address profile\n");
+#endif
     if (!game_version_select(root, why, sizeof why)) FATAL("%s\n", why);  // (the address table: game_addresses.h)
 #ifdef __ANDROID__
     { extern void settings_load(void); settings_load(); }
     native_begin_boot();  // (Native game code: the game's own code runs, no lasgame.so - runtime/native.c)
-    if (!native_on() && !gamelib_load(root, why, sizeof why)) FATAL("%s\n", why);
+    LOG("[boot] code mode: %s\n", native_on() ? "native ARM64" : "static recompiled");
+    if (!native_on()) {
+        LOG("[boot] loading the generated game library\n");
+        if (!gamelib_load(root, why, sizeof why)) FATAL("%s\n", why);
+    }
 #else
     if (!gamelib_load(root, why, sizeof why)) FATAL("%s\n", why);
 #endif
+#ifdef __ANDROID__
+    LOG("[boot] loading Switch executable modules\n");
+#endif
     loader_load(exefs);
+#ifdef __ANDROID__
+    LOG("[boot] mapped %d module(s)\n", g_nmodules);
+#endif
     rando_boot();  // the chosen seed's data patches go into the freshly loaded module
     { extern void settings_load(void); settings_load(); }
+#ifdef __ANDROID__
+    LOG("[boot] initializing guest kernel\n");
+#endif
     kernel_init();
 #ifdef __ANDROID__
-    if (!native_on()) dispatch_init();
-    native_prepare();  // (the seed's code words, the svcs, TLS and counter reads, patches.py's fixes)
+    if (!native_on()) {
+        LOG("[boot] initializing static-recomp dispatch\n");
+        dispatch_init();
+    }
+    LOG("[boot] preparing Native instruction gates\n");
+    native_prepare();
+    LOG("[boot] code preparation complete\n");
 #else
     dispatch_init();
 #endif
@@ -195,11 +222,20 @@ static void boot(const char *root) {
     }
     LOG("main thread: prio %d, stack 0x%x\n", prio, stack_size);
 
+#ifdef __ANDROID__
+    LOG("[boot] looking up nn::init::Start\n");
+#endif
     uint64_t start = loader_find_symbol("_ZN2nn4init5StartEmmPFvvES2_");
     if (!start) FATAL("nn::init::Start not found\n");
+#ifdef __ANDROID__
+    LOG("[boot] entrypoint=%llx\n", (unsigned long long)start);
+#endif
     uint64_t init_fn = hle_register("<rtld_init_sdk>", rtld_init_sdk);
     uint64_t fini_fn = hle_register("<rtld_init_main>", rtld_init_main);
     KThread *t = kernel_create_main_thread(start, stack_size, prio);
+#ifdef __ANDROID__
+    LOG("[boot] created main thread handle=%u; entering guest startup\n", t ? t->handle : 0);
+#endif
     kernel_run_main(t, t->handle, 0, init_fn, fini_fn);  // nn::init::Start(thread_handle, args_region, init, fini)
 }
 
