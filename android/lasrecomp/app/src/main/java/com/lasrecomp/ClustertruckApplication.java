@@ -3,19 +3,12 @@ package com.lasrecomp;
 import android.app.ActivityManager;
 import android.app.Application;
 import android.app.ApplicationExitInfo;
-import android.content.ContentUris;
-import android.content.ContentValues;
-import android.database.Cursor;
-import android.net.Uri;
 import android.os.Build;
-import android.os.Environment;
-import android.provider.MediaStore;
 import android.util.Log;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -24,18 +17,15 @@ import java.util.Locale;
 
 /**
  * Writes a small startup/crash breadcrumb log before SDL loads native libraries.
- * The report is placed in Download/Clustertruck so it remains accessible even
- * when the Activity crashes before the in-app logger can initialize.
+ * The report is stored beside the existing native runtime logs in the app's files/logs directory.
  */
 public final class ClustertruckApplication extends Application {
     private static final String TAG = "ClustertruckStartup";
     private static final String LOG_NAME = "clustertruck-startup-log.txt";
     private static final String PREVIOUS_NAME = "clustertruck-startup-previous.txt";
-    private static final String RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/Clustertruck/";
     private static final Object LOCK = new Object();
 
     private static ClustertruckApplication instance;
-    private static Uri logUri;
     private static File fallbackLog;
 
     @Override
@@ -45,7 +35,7 @@ public final class ClustertruckApplication extends Application {
 
         synchronized (LOCK) {
             try {
-                rotateLog();
+                initLogFiles();
                 writeLocked("==================================================");
                 writeLocked("Application.onCreate; package=" + getPackageName()
                         + "; Android=" + Build.VERSION.RELEASE
@@ -78,70 +68,25 @@ public final class ClustertruckApplication extends Application {
         }
     }
 
-    private static void rotateLog() throws Exception {
-        Uri current = findLog(LOG_NAME);
-        Uri previous = findLog(PREVIOUS_NAME);
-        if (previous != null) instance.getContentResolver().delete(previous, null, null);
-        if (current != null) {
-            ContentValues rename = new ContentValues();
-            rename.put(MediaStore.MediaColumns.DISPLAY_NAME, PREVIOUS_NAME);
-            instance.getContentResolver().update(current, rename, null, null);
+    private static void initLogFiles() throws Exception {
+        File dir = instance.getExternalFilesDir("logs");
+        if (dir == null) dir = new File(instance.getFilesDir(), "logs");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IllegalStateException("Could not create app logs directory: " + dir);
         }
-
-        ContentValues values = new ContentValues();
-        values.put(MediaStore.MediaColumns.DISPLAY_NAME, LOG_NAME);
-        values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
-        values.put(MediaStore.MediaColumns.RELATIVE_PATH, RELATIVE_PATH);
-        logUri = instance.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-        if (logUri == null) throw new IllegalStateException("MediaStore did not create " + RELATIVE_PATH + LOG_NAME);
-    }
-
-    private static Uri findLog(String name) {
-        String[] columns = {MediaStore.MediaColumns._ID};
-        String selection = MediaStore.MediaColumns.DISPLAY_NAME + "=? AND "
-                + MediaStore.MediaColumns.RELATIVE_PATH + "=?";
-        try (Cursor cursor = instance.getContentResolver().query(
-                MediaStore.Downloads.EXTERNAL_CONTENT_URI, columns, selection,
-                new String[]{name, RELATIVE_PATH}, null)) {
-            if (cursor != null && cursor.moveToFirst()) {
-                return ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                        cursor.getLong(0));
-            }
-        } catch (Throwable t) {
-            Log.w(TAG, "Could not find existing startup log " + name, t);
+        fallbackLog = new File(dir, LOG_NAME);
+        File previous = new File(dir, PREVIOUS_NAME);
+        if (previous.exists() && !previous.delete()) {
+            Log.w(TAG, "Could not remove previous startup log");
         }
-        return null;
-    }
-
-    private static void initFallback() {
-        try {
-            File dir = instance.getExternalFilesDir("logs");
-            if (dir == null) dir = new File(instance.getFilesDir(), "logs");
-            if (!dir.exists() && !dir.mkdirs()) return;
-            fallbackLog = new File(dir, LOG_NAME);
-        } catch (Throwable t) {
-            Log.e(TAG, "Could not initialize fallback log", t);
+        if (fallbackLog.exists() && !fallbackLog.renameTo(previous)) {
+            Log.w(TAG, "Could not rotate previous startup log");
         }
     }
 
     private static void writeLocked(String message) {
         String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(new Date());
         byte[] bytes = (stamp + " " + message + "\n").getBytes(StandardCharsets.UTF_8);
-        try {
-            if (logUri != null) {
-                try (OutputStream out = instance.getContentResolver().openOutputStream(logUri, "wa")) {
-                    if (out == null) throw new IllegalStateException("Could not open startup log for append");
-                    out.write(bytes);
-                    out.flush();
-                    return;
-                }
-            }
-        } catch (Throwable t) {
-            Log.e(TAG, "Could not append public startup log", t);
-            logUri = null;
-            if (fallbackLog == null) initFallback();
-        }
-
         try {
             if (fallbackLog != null) {
                 try (FileOutputStream out = new FileOutputStream(fallbackLog, true)) {
@@ -151,7 +96,7 @@ public final class ClustertruckApplication extends Application {
                 }
             }
         } catch (Throwable t) {
-            Log.e(TAG, "Could not append fallback startup log", t);
+            Log.e(TAG, "Could not append startup log", t);
         }
         Log.i(TAG, message);
     }
